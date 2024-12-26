@@ -1,6 +1,16 @@
 # ai2thor-emodied-LLM
 
 
+## Installation
+
+```bash
+# Create the venv
+python -m venv .venv
+# Activate the venv
+source .venv/bin/activate
+# Install the requirements
+pip install -r requirements.txt
+```
 
 ## Getting started
 
