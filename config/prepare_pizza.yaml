@@ -1,0 +1,6 @@
+simulator_config:
+  scene: 'FloorPlan212'
+llm_config:
+  human_task: ''
+  model: ''
+  system_task: ''
