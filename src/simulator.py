@@ -48,9 +48,21 @@ class QueryReturn:
 
 class SimulatorBackend:
     def __init__(self, scene: str):
+        """Represents the simulator backend so that
+        the agent can interact with.
+
+        Args:
+            scene (str): The scene name to use.
+        """
         self._controller = Controller(scene=scene)
 
     def get_available_actions(self) -> List[Callable]:
+        """Returns the available actions within the simulator
+        that the agent can take.
+
+        Returns:
+            List[Callable]: The list of available actions to take.
+        """
         return [
             self.move_back,
             self.move_ahead,
@@ -70,6 +82,16 @@ class SimulatorBackend:
 
     @staticmethod
     def extract_environment_state_from_event(event: Event) -> EnvironmentState:
+        """Extracts the environment state from an event and places it
+        to the form of EnvironmentState instance.
+
+        Args:
+            event (Event): The Event due to an agent action.
+
+        Returns:
+            EnvironmentState: The instance that abstracts the
+                environment state.
+        """
         agent_position = event.metadata['agent']['position']
         agent_rotation = event.metadata['agent']['rotation']
         last_action_sucess = event.metadata['lastActionSuccess']
@@ -80,48 +102,106 @@ class SimulatorBackend:
 
     @staticmethod
     def get_object_from_event(event: Event, object_id: str) -> Dict[str, Any]:
+        """Returns an object specified by an object_id from the event which
+        contained the environment attributes.
+
+        Args:
+            event (Event): The event resulted from the agent taking an action.
+            object_id (str): The object id to search for.
+
+        Raises:
+            AttributeError: If no object is found with the specified id.
+
+        Returns:
+            Dict[str, Any]: The found object dict.
+        """
         for object_dict in event.metadata['objects']:
             if object_dict['objectId'] == object_id:
                 return object_dict
-        raise AttributeError(f'Object with id {object_id} doesn\'t exists in the current scene')
+        raise AttributeError(f'Object with id {object_id} doesn\'t '
+                             'exists in the current scene')
 
     @tool
     def move_back(self) -> EnvironmentState:
+        """Moves the agent backward by 0.25 meters
+
+        Returns:
+            EnvironmentState: The environment state after executing the action.
+        """
         event = self._controller.step(action="MoveBack")
         return self.extract_environment_state_from_event(event)
 
     @tool
     def move_ahead(self) -> EnvironmentState:
+        """Moves the agent forward by 0.25 meters
+
+        Returns:
+            EnvironmentState: The environment state after executing the action.
+        """
         event = self._controller.step(action="MoveAhead")
         return self.extract_environment_state_from_event(event)
 
     @tool
     def move_left(self) -> EnvironmentState:
+        """Moves the agent left by 0.25 meters
+
+        Returns:
+            EnvironmentState: The environment state after executing the action.
+        """
         event = self._controller.step(action="MoveLeft")
         return self.extract_environment_state_from_event(event)
 
     @tool
     def move_right(self) -> EnvironmentState:
+        """Moves the agent right by 0.25 meters
+
+        Returns:
+            EnvironmentState: The environment state after executing the action.
+        """
         event = self._controller.step(action="MoveRight")
         return self.extract_environment_state_from_event(event)
 
     @tool
     def rotate_left(self) -> EnvironmentState:
+        """Rotates the agent left by 90 degrees
+
+        Returns:
+            EnvironmentState: The environment state after executing the action.
+        """
         event = self._controller.step(action="RotateLeft")
         return self.extract_environment_state_from_event(event)
 
     @tool
     def rotate_right(self) -> EnvironmentState:
+        """Rotates the agent right by 90 degrees
+
+        Returns:
+            EnvironmentState: The environment state after executing the action.
+        """
         event = self._controller.step(action="RotateRight")
         return self.extract_environment_state_from_event(event)
 
     @tool
     def done(self) -> EnvironmentState:
+        """Indicates that the task has been completed.
+
+        Returns:
+            EnvironmentState: The environment state after executing the action.
+        """
         event = self._controller.step(action="Done")
         return self.extract_environment_state_from_event(event)
 
     @tool
     def pick_object(self, object_id: str) -> EnvironmentState:
+        """Pick up an object and place it in the agents hand, the
+        object must be visible and within the agents reach.
+
+        Args:
+            object_id (str): The object id of the object to pick
+
+        Returns:
+            EnvironmentState: The environment state after executing the action.
+        """
         event = self._controller.step(
             action="PickupObject",
             objectId=object_id,
@@ -131,6 +211,15 @@ class SimulatorBackend:
 
     @tool
     def put_object(self, object_id: str) -> EnvironmentState:
+        """Puts an object that has been picked in the agents hand.
+
+        Args:
+            object_id (str): The object id of the object
+                that is on the agent hand.
+
+        Returns:
+            EnvironmentState: The environment state after executing the action.
+        """
         event = self._controller.step(
             action="PutObject",
             objectId=object_id,
@@ -140,6 +229,15 @@ class SimulatorBackend:
 
     @tool
     def open_object(self, object_id: str) -> EnvironmentState:
+        """Opens an object like a frdige or microwave.
+
+        Args:
+            object_id (str): The closed The object id
+                for the object that needs to be opened.
+
+        Returns:
+            EnvironmentState: The environment state after executing the action.
+        """
         event = self._controller.strp(
             action="OpenObject",
             objectId=object_id,
@@ -149,6 +247,15 @@ class SimulatorBackend:
 
     @tool
     def close_object(self, object_id: str) -> EnvironmentState:
+        """Closes an object like a frdige or microwave.
+
+        Args:
+            object_id (str): The object id for the object
+                that needs to be closed.
+
+        Returns:
+            EnvironmentState: The environment state after executing the action.
+        """
         event = self._controller.strp(
             action="CloseObject",
             objectId=object_id,
@@ -158,6 +265,14 @@ class SimulatorBackend:
 
     @tool
     def toggle_object_on(self, object_id: str) -> EnvironmentState:
+        """Toggles on an object like a microwave.
+
+        Args:
+            object_id (str): The object id for the object to toggle on.
+
+        Returns:
+            EnvironmentState: The environment state after executing the action.
+        """
         event = self._controller.strp(
             action="ToggleObjectOn",
             objectId=object_id,
@@ -166,6 +281,14 @@ class SimulatorBackend:
 
     @tool
     def toggle_object_off(self, object_id: str) -> EnvironmentState:
+        """Toggles off an object like a microwave.
+
+        Args:
+            object_id (str): The object id for the object to toggle off.
+
+        Returns:
+            EnvironmentState: The environment state after executing the action.
+        """
         event = self._controller.step(
             action="ToggleObjectOff",
             objectId=object_id,
@@ -174,6 +297,20 @@ class SimulatorBackend:
 
     @tool
     def query_object(self, x: float, y: float) -> QueryReturn:
+        """Queries the object specified by the x, y coordinates
+        in the agent view.
+
+        Args:
+            x (float): The normalized x-coodinate of the object
+                relative to the top-left corner of the agent view image.
+                This is a normalized coordinates, so it has a range [0, 1].
+            y (float): The normalized y-coodinate of the object
+                relative to the top-left corner of the agent view image.
+                This is a normalized coordinates, so it has a range [0, 1].
+
+        Returns:
+            QueryReturn: The output of quering the object.
+        """
         event = self._controller.step(
             action="GetObjectInFrame",
             x=x,
