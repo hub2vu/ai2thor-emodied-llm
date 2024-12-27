@@ -1,0 +1,15 @@
+simulator_config:
+  scene: 'FloorPlan3'
+llm_config:
+  human_task: '
+  Your Task is:
+  - search for the apple.
+  - put the apple in the fridge.
+  '
+  model: 'gpt-4o'
+  system_task: '
+  - You will control a Robot inside the simulator.
+  - You will be given a task to do inside the simulator.
+  - Use the simulator actions to control the robot and fullfill your task.
+  - After completing your task invoke the Done action.
+  '
