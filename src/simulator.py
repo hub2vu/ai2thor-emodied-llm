@@ -1,12 +1,17 @@
 """Represents a simulator backend for simulating the env and
 the robot motion inside it.
 """
-from typing import Dict, List, Callable, Any
+from typing import Dict, List, Callable, Any, Tuple
 from dataclasses import field
+from io import BytesIO
+import base64
 
+import numpy as np
+from PIL import Image
 from ai2thor.controller import Controller
 from ai2thor.server import Event
 from langchain_core.tools import tool
+from langchain_core.messages import AIMessage
 from pydantic.dataclasses import dataclass
 
 
@@ -27,6 +32,8 @@ class EnvironmentState:
     error_message: str = field(metadata={
         "description": "if the last action was not successfull then this is "
         "the resulted error message due to action execution"})
+    agent_camera_view: str = field(metadata={
+        "description": "The agent camera view data url"})
 
 
 @dataclass
@@ -103,6 +110,25 @@ class SimulatorBackend:
             "j": self.toggle_object_off,
         }
 
+    def execute_action(
+            self, ai_message: AIMessage) -> Tuple[EnvironmentState, str]:
+        """Executes the action from the specified message.
+
+        Args:
+            ai_message (AIMessage): The AI message to execute the calls from.
+
+        Returns:
+            Tuple[EnvironmentState, str]: The environment feedback
+                and the executed action id.
+        """
+        tool_callback_dict = ai_message.tool_calls[0]
+        call_id = tool_callback_dict["id"]
+        func_name = tool_callback_dict['name']
+        func_args = tool_callback_dict['args']
+        func: Callable = getattr(self, func_name)
+        env_feedback = func(**func_args)
+        return (env_feedback, call_id)
+
     @staticmethod
     def extract_environment_state_from_event(event: Event) -> EnvironmentState:
         """Extracts the environment state from an event and places it
@@ -119,8 +145,12 @@ class SimulatorBackend:
         agent_rotation = event.metadata['agent']['rotation']
         last_action_sucess = event.metadata['lastActionSuccess']
         error_message = event.metadata['errorMessage']
+        img_frame = event.frame
+        png_data_url = SimulatorBackend.encode_img_as_base64_png_data_url(
+            img_frame)
         env_state = EnvironmentState(agent_position, agent_rotation,
-                                     last_action_sucess, error_message)
+                                     last_action_sucess, error_message,
+                                     png_data_url)
         return env_state
 
     @staticmethod
@@ -143,6 +173,28 @@ class SimulatorBackend:
                 return object_dict
         raise AttributeError(f'Object with id {object_id} doesn\'t '
                              'exists in the current scene')
+
+    @staticmethod
+    def encode_img_as_base64_png_data_url(img: np.ndarray) -> str:
+        """Encode a numpy array as png data url encoded in base64 string.
+
+        Args:
+            img (np.ndarray): The image to encode.
+
+        Returns:
+            str: The encoded image data url.
+        """
+        pil_img = Image.fromarray(img)
+        buffered = BytesIO()
+        pil_img.save(buffered, format='PNG')
+        img_bytes = buffered.getvalue()
+        img_base64 = base64.b64encode(img_bytes).decode('utf-8')
+        data_url = f"data:image/png;base64,{img_base64}"
+        return data_url
+
+    def initailize_simulator(self) -> EnvironmentState:
+        event = self._controller.step(action="Initialize")
+        return self.extract_environment_state_from_event(event)
 
     @tool
     def move_back(self) -> EnvironmentState:
