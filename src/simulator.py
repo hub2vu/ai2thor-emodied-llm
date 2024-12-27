@@ -80,6 +80,29 @@ class SimulatorBackend:
             self.toggle_object_off,
         ]
 
+    def get_key_event_vs_action(self) -> Dict[str, Callable]:
+        """Returns the event vs action dictionary
+
+        Returns:
+            Dict[str, Callable]: The event name vs action dictionary.
+        """
+        return {
+            "s": self.move_back,
+            "w": self.move_ahead,
+            "a": self.move_left,
+            "d": self.move_right,
+            "left": self.rotate_left,
+            "right": self.rotate_right,
+            "c": self.close_object,
+            "o": self.open_object,
+            "p": self.put_object,
+            "i": self.pick_object,
+            "q": self.query_object,
+            "n": self.done,
+            "t": self.toggle_object_on,
+            "j": self.toggle_object_off,
+        }
+
     @staticmethod
     def extract_environment_state_from_event(event: Event) -> EnvironmentState:
         """Extracts the environment state from an event and places it
