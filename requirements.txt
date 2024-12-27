@@ -1,2 +1,5 @@
 ai2thor
 langchain-openai
+keyboard
+Pillow
+numpy
