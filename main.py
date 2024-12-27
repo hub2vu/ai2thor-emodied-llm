@@ -2,6 +2,11 @@
 """
 
 import argparse
+import yaml
+import keyboard
+
+from src.simulator import SimulatorBackend
+from src.llm_agent import LLMAgent
 
 
 def parse_args():
@@ -22,15 +27,70 @@ def parse_args():
     return parser.parse_args()
 
 
+def read_yaml_file(file_path: str) -> dict:
+    """
+    Reads a YAML file and returns its content as a Python dictionary.
+
+    Args:
+        file_path (str): Path to the YAML file.
+
+    Returns:
+        dict: A dictionary containing the parsed YAML data.
+
+    Raises:
+        FileNotFoundError: If the file does not exist.
+        yaml.YAMLError: If there is an error parsing the YAML file.
+    """
+    try:
+        with open(file_path, 'r') as file:
+            data = yaml.load(file)
+            return data
+    except FileNotFoundError as e:
+        print(f"Error: The file at {file_path} was not found.")
+        raise e
+    except yaml.YAMLError as e:
+        print(f"Error: Failed to parse YAML file at {file_path}.")
+        raise e
+
+
 def main() -> None:
     """Main function to run the script."""
     args = parse_args()
 
     # Access the config file path
     config_file = args.config_file
-
-    # Add your main logic here
-    print(f"Using config file: {config_file}")
+    config = read_yaml_file(config_file)
+    simulator_config = config['simulator_config']
+    simulator = SimulatorBackend(**simulator_config)
+    agent_config = config['llm_config']
+    agent = LLMAgent(
+        tools=simulator.get_available_actions(), **agent_config)
+    env_feedback = simulator.initailize_simulator()
+    return_msg_id = ''
+    while True:
+        print("press esc to exit")
+        print("press c to continue")
+        event = keyboard.read_event()  # Wait for a keyboard event
+        if event.event_type == "down":  # Only capture key down events
+            print(f"Key pressed: {event.name}")
+            if event.name == "esc":  # Exit if the 'Esc' key is pressed
+                print("Exiting...")
+                break
+            elif event.name == "c":
+                print("Continuing...")
+                ai_message = agent.send_environment_feedback(
+                    env_feedback, return_msg_id)
+                # make the simulator execute the agent action in temp_state
+                temp_env_feedback, return_msg_id = simulator.execute_action(
+                    ai_message)
+                # print the first env feedback and the agent message
+                print(f"Env Feedback: {env_feedback}")
+                print(f"AI Message: {ai_message}")
+                print("--------------------------------------------------")
+                # put the temp state in the env_feedback
+                env_feedback = temp_env_feedback
+            else:
+                print(f"wrong key press: {event.name}, Skipping...")
 
 
 if __name__ == "__main__":
