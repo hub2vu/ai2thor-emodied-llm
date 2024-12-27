@@ -11,5 +11,7 @@ llm_config:
   - You will control a Robot inside the simulator.
   - You will be given a task to do inside the simulator.
   - Use the simulator actions to control the robot and fullfill your task.
+  - After executing each action you will be presented by an Environment feedback which also contains the agent view.
   - After completing your task invoke the Done action.
+  - With each message also explain your reasoning while executing each action.
   '
