@@ -11,8 +11,10 @@ from PIL import Image
 from ai2thor.controller import Controller
 from ai2thor.server import Event
 from langchain_core.tools import tool
+from langchain_core.tools.structured import StructuredTool
 from langchain_core.messages import AIMessage
 from pydantic.dataclasses import dataclass
+from pydantic import BaseModel, Field
 
 
 @dataclass
@@ -51,6 +53,87 @@ class QueryReturn:
     is_valid: bool = field(metadata={
         "description": "True if there is a valid object "
         "returned by the query"})
+    agent_camera_view: str = field(metadata={
+        "description": "The agent camera view data url"})
+
+
+class NoArgsSchema(BaseModel):
+    pass
+
+
+class PickObject(BaseModel):
+    """
+    Pick up an object and place it in the agents hand, the
+    object must be visible and within the agents reach.
+    """
+    object_id: str = Field(
+        metadata={"description": "The object id of the object to pick"}
+    )
+
+
+class PutObject(BaseModel):
+    """
+    Puts an object that has been picked in the agents hand.
+    """
+    object_id: str = Field(
+        metadata={"description": "The object id of the "
+                  "object that is on the agent hand."}
+    )
+
+
+class OpenObject(BaseModel):
+    """
+    Opens an object like a fridge or microwave.
+    """
+    object_id: str = Field(
+        metadata={"description": "The object id for the "
+                  "object that needs to be opened."}
+    )
+
+
+class CloseObject(BaseModel):
+    """
+    Closes an object like a fridge or microwave.
+    """
+    object_id: str = Field(
+        metadata={"description": "The object id for "
+                  "the object that needs to be closed."}
+    )
+
+
+class ToggleObjectOn(BaseModel):
+    """
+    Toggles on an object like a microwave.
+    """
+    object_id: str = Field(
+        metadata={"description": "The object id for the object to toggle on."}
+    )
+
+
+class ToggleObjectOff(BaseModel):
+    """
+    Toggles off an object like a microwave.
+    """
+    object_id: str = Field(
+        metadata={"description": "The object id for the object to toggle off."}
+    )
+
+
+class QueryObject(BaseModel):
+    """
+    Queries the object specified by the x, y coordinates
+    in the agent view.
+    """
+    x: float = Field(
+        metadata={"description": "The normalized x-coordinate of the object "
+                  "relative to the top-left corner of the agent view image. "
+                  "This is a normalized coordinate, so it has a range [0, 1]."}
+    )
+    y: float = Field(
+        metadata={"description": "The normalized y-coordinate of the object "
+                  "relative to the top-left corner of the agent view image. "
+                  "This is a normalized coordinate, so it has a range [0, 1]."}
+    )
 
 
 class SimulatorBackend:
@@ -61,7 +144,8 @@ class SimulatorBackend:
         Args:
             scene (str): The scene name to use.
         """
-        self._controller = Controller(scene=scene)
+        self._controller = Controller(
+            scene=scene, width=800, height=600)
 
     def get_available_actions(self) -> List[Callable]:
         """Returns the available actions within the simulator
@@ -125,8 +209,8 @@ class SimulatorBackend:
         call_id = tool_callback_dict["id"]
         func_name = tool_callback_dict['name']
         func_args = tool_callback_dict['args']
-        func: Callable = getattr(self, func_name)
-        env_feedback = func(**func_args)
+        tool: StructuredTool = getattr(self, func_name)
+        env_feedback = tool.func(self, **func_args)
         return (env_feedback, call_id)
 
     @staticmethod
@@ -186,17 +270,17 @@ class SimulatorBackend:
         """
         pil_img = Image.fromarray(img)
         buffered = BytesIO()
-        pil_img.save(buffered, format='PNG')
+        pil_img.save(buffered, format='JPEG')
         img_bytes = buffered.getvalue()
         img_base64 = base64.b64encode(img_bytes).decode('utf-8')
-        data_url = f"data:image/png;base64,{img_base64}"
+        data_url = f"data:image/jpeg;base64,{img_base64}"
         return data_url
 
     def initailize_simulator(self) -> EnvironmentState:
         event = self._controller.step(action="Initialize")
         return self.extract_environment_state_from_event(event)
 
-    @tool
+    @tool(args_schema=NoArgsSchema)
     def move_back(self) -> EnvironmentState:
         """Moves the agent backward by 0.25 meters
 
@@ -206,7 +290,7 @@ class SimulatorBackend:
         event = self._controller.step(action="MoveBack")
         return self.extract_environment_state_from_event(event)
 
-    @tool
+    @tool(args_schema=NoArgsSchema)
     def move_ahead(self) -> EnvironmentState:
         """Moves the agent forward by 0.25 meters
 
@@ -216,7 +300,7 @@ class SimulatorBackend:
         event = self._controller.step(action="MoveAhead")
         return self.extract_environment_state_from_event(event)
 
-    @tool
+    @tool(args_schema=NoArgsSchema)
     def move_left(self) -> EnvironmentState:
         """Moves the agent left by 0.25 meters
 
@@ -226,7 +310,7 @@ class SimulatorBackend:
         event = self._controller.step(action="MoveLeft")
         return self.extract_environment_state_from_event(event)
 
-    @tool
+    @tool(args_schema=NoArgsSchema)
     def move_right(self) -> EnvironmentState:
         """Moves the agent right by 0.25 meters
 
@@ -236,7 +320,7 @@ class SimulatorBackend:
         event = self._controller.step(action="MoveRight")
         return self.extract_environment_state_from_event(event)
 
-    @tool
+    @tool(args_schema=NoArgsSchema)
     def rotate_left(self) -> EnvironmentState:
         """Rotates the agent left by 90 degrees
 
@@ -246,7 +330,7 @@ class SimulatorBackend:
         event = self._controller.step(action="RotateLeft")
         return self.extract_environment_state_from_event(event)
 
-    @tool
+    @tool(args_schema=NoArgsSchema)
     def rotate_right(self) -> EnvironmentState:
         """Rotates the agent right by 90 degrees
 
@@ -256,7 +340,7 @@ class SimulatorBackend:
         event = self._controller.step(action="RotateRight")
         return self.extract_environment_state_from_event(event)
 
-    @tool
+    @tool(args_schema=NoArgsSchema)
     def done(self) -> EnvironmentState:
         """Indicates that the task has been completed.
 
@@ -266,7 +350,7 @@ class SimulatorBackend:
         event = self._controller.step(action="Done")
         return self.extract_environment_state_from_event(event)
 
-    @tool
+    @tool(args_schema=PickObject)
     def pick_object(self, object_id: str) -> EnvironmentState:
         """Pick up an object and place it in the agents hand, the
         object must be visible and within the agents reach.
@@ -284,7 +368,7 @@ class SimulatorBackend:
             manualInteract=False)
         return self.extract_environment_state_from_event(event)
 
-    @tool
+    @tool(args_schema=PutObject)
     def put_object(self, object_id: str) -> EnvironmentState:
         """Puts an object that has been picked in the agents hand.
 
@@ -302,7 +386,7 @@ class SimulatorBackend:
             placeStationary=True)
         return self.extract_environment_state_from_event(event)
 
-    @tool
+    @tool(args_schema=OpenObject)
     def open_object(self, object_id: str) -> EnvironmentState:
         """Opens an object like a frdige or microwave.
 
@@ -320,7 +404,7 @@ class SimulatorBackend:
             forceAction=False)
         return self.extract_environment_state_from_event(event)
 
-    @tool
+    @tool(args_schema=CloseObject)
     def close_object(self, object_id: str) -> EnvironmentState:
         """Closes an object like a frdige or microwave.
 
@@ -338,7 +422,7 @@ class SimulatorBackend:
             forceAction=False)
         return self.extract_environment_state_from_event(event)
 
-    @tool
+    @tool(args_schema=ToggleObjectOn)
     def toggle_object_on(self, object_id: str) -> EnvironmentState:
         """Toggles on an object like a microwave.
 
@@ -354,7 +438,7 @@ class SimulatorBackend:
             forceAction=False)
         return self.extract_environment_state_from_event(event)
 
-    @tool
+    @tool(args_schema=ToggleObjectOff)
     def toggle_object_off(self, object_id: str) -> EnvironmentState:
         """Toggles off an object like a microwave.
 
@@ -370,7 +454,7 @@ class SimulatorBackend:
             forceAction=False)
         return self.extract_environment_state_from_event(event)
 
-    @tool
+    @tool(args_schema=QueryObject)
     def query_object(self, x: float, y: float) -> QueryReturn:
         """Queries the object specified by the x, y coordinates
         in the agent view.
@@ -393,12 +477,16 @@ class SimulatorBackend:
             checkVisible=True
         )
         object_id = event.metadata["actionReturn"]
+        img_frame = event.frame
+        png_data_url = SimulatorBackend.encode_img_as_base64_png_data_url(
+            img_frame)
         if object_id is None or object_id == '':
-            return QueryReturn('', {}, False, False)
+            return QueryReturn('', {}, False, False, png_data_url)
         else:
             object_dict = self.get_object_from_event(object_id)
             is_visible = object_dict['visible']
             object_position = object_dict['position']
             query_return = QueryReturn(
-                object_id, object_position, is_visible, True)
+                object_id, object_position, is_visible, True,
+                png_data_url)
             return query_return

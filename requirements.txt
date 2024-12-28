@@ -1,5 +1,5 @@
 ai2thor
 langchain-openai
-keyboard
+pynput
 Pillow
 numpy

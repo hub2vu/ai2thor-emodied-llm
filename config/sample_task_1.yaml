@@ -11,7 +11,11 @@ llm_config:
   - You will control a Robot inside the simulator.
   - You will be given a task to do inside the simulator.
   - Use the simulator actions to control the robot and fullfill your task.
-  - After executing each action you will be presented by an Environment feedback which also contains the agent view.
+  - After executing each action you will be presented by an Environment state.
+  - A human will also provide you with a screenshot from the simulator.
   - After completing your task invoke the Done action.
   - With each message also explain your reasoning while executing each action.
+  - A human will provide you with a screenshot from the simulator at the start of the episode.
+  - You can only call one action at a time.
+  - You must be less than 1.5 meters from an object to be able to interact with it.
   '

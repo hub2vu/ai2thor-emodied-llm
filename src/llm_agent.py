@@ -17,24 +17,42 @@ class LLMAgent:
         self._human_task = human_task
         self._llm = self._llm.bind_tools(tools, strict=True)
         self._first_message = True
+        self._message_history = []
 
     def send_environment_feedback(
             self, env_feedback: Union[EnvironmentState, QueryReturn],
             return_message_id: str) -> AIMessage:
         if self._first_message:
             self._first_message = False
-            return self._llm.invoke([
+            encoded_img = env_feedback.agent_camera_view
+            self._message_history.extend([
                 SystemMessage(content=self._system_task),
                 HumanMessage(content=self._human_task),
-                ToolMessage(
-                    tool_call_id=return_message_id,
-                    content=env_feedback
-                )
+                HumanMessage(content=[
+                    {"type": "text",
+                     "text": "Here is a screenshot from the simulator"},
+                    {"type": "image_url",
+                     "image_url": {"url": encoded_img}}]),
             ])
+            ai_response_msg = self._llm.invoke(self._message_history)
+            self._message_history.append(ai_response_msg)
+            return ai_response_msg
         else:
-            return self._llm.invoke([
-                ToolMessage(
+            encoded_img = env_feedback.agent_camera_view
+            env_feedback.agent_camera_view = ''
+            self._message_history.extend(
+                [ToolMessage(
                     tool_call_id=return_message_id,
-                    content=env_feedback
-                )
-            ])
+                    content=[
+                        {"type": "text", "text": str(env_feedback)},
+                    ],
+                ),
+                 HumanMessage(content=[
+                    {"type": "text",
+                     "text": "Here is a screenshot from the simulator"},
+                    {"type": "image_url",
+                     "image_url": {"url": encoded_img}}])
+                ])
+            ai_response_msg = self._llm.invoke(self._message_history)
+            self._message_history.append(ai_response_msg)
+            return ai_response_msg
