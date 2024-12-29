@@ -4,7 +4,13 @@ llm_config:
   human_task: '
   Your Task is:
   - search for the apple.
-  - put the apple in the fridge.
+  - pick the apple.
+  - go stand in front of the fridge, you should be facing the fridge door with less than 1.5 meters ahead.
+  - Ensure that you are directly facing the fridge door before attemping to open the fridge.
+  - open the fridge.
+  - put the apple in the fridge. 
+  - close the fridge.
+  - A fridge has the type fridge.
   '
   model: 'gpt-4o'
   system_task: '
@@ -18,4 +24,7 @@ llm_config:
   - A human will provide you with a screenshot from the simulator at the start of the episode.
   - You can only call one action at a time.
   - You must be less than 1.5 meters from an object to be able to interact with it.
+  - An Item will be in the visible items when it is less than 1.5 meters from the agent, and there is no other items obstructs the agent view.
+  - If you see an object in the simulator screenshot, but it is not in the visible_objects list then you will need to approach the object to be able to interact with it.
+  - Do NOT make up object_ids wait till you are less than 1.5 meters, you are aligned correctly with an object and, the object in the visible_objects list then use the object_id from this list visible_objects to ineract with it.
   '

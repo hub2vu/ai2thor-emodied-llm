@@ -18,6 +18,20 @@ from pydantic import BaseModel, Field
 
 
 @dataclass
+class SimulatorObject:
+    """A Class that describes the state of an object within the simulator.
+    """
+    position: Dict[str, float] = field(metadata={
+        "description": "Contains the x, y, z "
+        "position of the object relative to the world coordinates in meters"})
+    object_id: str = field(metadata={
+        "description": "The object id that can be used to interact "
+        "with this object"})
+    object_type: str = field(metadata={
+        "description": "The class type of the object"})
+
+
+@dataclass
 class EnvironmentState:
     """A Class that returns the environment state after executing an
     action by the agent.
@@ -34,8 +48,18 @@ class EnvironmentState:
     error_message: str = field(metadata={
         "description": "if the last action was not successfull then this is "
         "the resulted error message due to action execution"})
+    visible_objects: List[SimulatorObject] = field(metadata={
+        "description": "A list of the visible objects to the robot "
+        "agent inside the simulator"})
     agent_camera_view: str = field(metadata={
         "description": "The agent camera view data url"})
+
+    def __str__(self) -> str:
+        return (f"EvironmentState(agent_position={self. agent_position}, "
+                f"agent_rotation={self.agent_rotation}, "
+                f"last_action_success={self.last_action_success}, "
+                f"error_message='{self.error_message}', "
+                f"visible_objects={self.visible_objects})")
 
 
 @dataclass
@@ -165,7 +189,7 @@ class SimulatorBackend:
             self.open_object,
             self.put_object,
             self.pick_object,
-            self.query_object,
+            # self.query_object,
             self.done,
             self.toggle_object_on,
             self.toggle_object_off,
@@ -232,9 +256,11 @@ class SimulatorBackend:
         img_frame = event.frame
         png_data_url = SimulatorBackend.encode_img_as_base64_png_data_url(
             img_frame)
+        visible_objects = SimulatorBackend.get_visible_objects_from_event(
+            event)
         env_state = EnvironmentState(agent_position, agent_rotation,
                                      last_action_sucess, error_message,
-                                     png_data_url)
+                                     visible_objects, png_data_url)
         return env_state
 
     @staticmethod
@@ -257,6 +283,17 @@ class SimulatorBackend:
                 return object_dict
         raise AttributeError(f'Object with id {object_id} doesn\'t '
                              'exists in the current scene')
+
+    @staticmethod
+    def get_visible_objects_from_event(event: Event) -> List[SimulatorObject]:
+        visible_objects = []
+        for object_dict in event.metadata['objects']:
+            if object_dict['visible']:
+                obj = SimulatorObject(
+                    object_dict['position'], object_dict['objectId'],
+                    object_dict['objectType'])
+                visible_objects.append(obj)
+        return visible_objects
 
     @staticmethod
     def encode_img_as_base64_png_data_url(img: np.ndarray) -> str:
@@ -369,19 +406,19 @@ class SimulatorBackend:
         return self.extract_environment_state_from_event(event)
 
     @tool(args_schema=PutObject)
-    def put_object(self, object_id: str) -> EnvironmentState:
+    def put_object(self, target_id: str) -> EnvironmentState:
         """Puts an object that has been picked in the agents hand.
 
         Args:
-            object_id (str): The object id of the object
-                that is on the agent hand.
+            target_id (str): The object id of the receptable object
+                like fridge or cabinet or microwave.
 
         Returns:
             EnvironmentState: The environment state after executing the action.
         """
         event = self._controller.step(
             action="PutObject",
-            objectId=object_id,
+            objectId=target_id,
             forceAction=False,
             placeStationary=True)
         return self.extract_environment_state_from_event(event)
@@ -397,7 +434,7 @@ class SimulatorBackend:
         Returns:
             EnvironmentState: The environment state after executing the action.
         """
-        event = self._controller.strp(
+        event = self._controller.step(
             action="OpenObject",
             objectId=object_id,
             openness=1,
@@ -415,7 +452,7 @@ class SimulatorBackend:
         Returns:
             EnvironmentState: The environment state after executing the action.
         """
-        event = self._controller.strp(
+        event = self._controller.step(
             action="CloseObject",
             objectId=object_id,
             openness=1,
@@ -432,7 +469,7 @@ class SimulatorBackend:
         Returns:
             EnvironmentState: The environment state after executing the action.
         """
-        event = self._controller.strp(
+        event = self._controller.step(
             action="ToggleObjectOn",
             objectId=object_id,
             forceAction=False)
@@ -454,39 +491,39 @@ class SimulatorBackend:
             forceAction=False)
         return self.extract_environment_state_from_event(event)
 
-    @tool(args_schema=QueryObject)
-    def query_object(self, x: float, y: float) -> QueryReturn:
-        """Queries the object specified by the x, y coordinates
-        in the agent view.
+    # @tool(args_schema=QueryObject)
+    # def query_object(self, x: float, y: float) -> QueryReturn:
+    #     """Queries the object specified by the x, y coordinates
+    #     in the agent view.
 
-        Args:
-            x (float): The normalized x-coodinate of the object
-                relative to the top-left corner of the agent view image.
-                This is a normalized coordinates, so it has a range [0, 1].
-            y (float): The normalized y-coodinate of the object
-                relative to the top-left corner of the agent view image.
-                This is a normalized coordinates, so it has a range [0, 1].
+    #     Args:
+    #         x (float): The normalized x-coodinate of the object
+    #             relative to the top-left corner of the agent view image.
+    #             This is a normalized coordinates, so it has a range [0, 1].
+    #         y (float): The normalized y-coodinate of the object
+    #             relative to the top-left corner of the agent view image.
+    #             This is a normalized coordinates, so it has a range [0, 1].
 
-        Returns:
-            QueryReturn: The output of quering the object.
-        """
-        event = self._controller.step(
-            action="GetObjectInFrame",
-            x=x,
-            y=y,
-            checkVisible=True
-        )
-        object_id = event.metadata["actionReturn"]
-        img_frame = event.frame
-        png_data_url = SimulatorBackend.encode_img_as_base64_png_data_url(
-            img_frame)
-        if object_id is None or object_id == '':
-            return QueryReturn('', {}, False, False, png_data_url)
-        else:
-            object_dict = self.get_object_from_event(object_id)
-            is_visible = object_dict['visible']
-            object_position = object_dict['position']
-            query_return = QueryReturn(
-                object_id, object_position, is_visible, True,
-                png_data_url)
-            return query_return
+    #     Returns:
+    #         QueryReturn: The output of quering the object.
+    #     """
+    #     event = self._controller.step(
+    #         action="GetObjectInFrame",
+    #         x=x,
+    #         y=y,
+    #         checkVisible=True
+    #     )
+    #     object_id = event.metadata["actionReturn"]
+    #     img_frame = event.frame
+    #     png_data_url = SimulatorBackend.encode_img_as_base64_png_data_url(
+    #         img_frame)
+    #     if object_id is None or object_id == '':
+    #         return QueryReturn('', {}, False, False, png_data_url)
+    #     else:
+    #         object_dict = self.get_object_from_event(object_id)
+    #         is_visible = object_dict['visible']
+    #         object_position = object_dict['position']
+    #         query_return = QueryReturn(
+    #             object_id, object_position, is_visible, True,
+    #             png_data_url)
+    #         return query_return

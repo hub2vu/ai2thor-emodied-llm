@@ -73,8 +73,9 @@ def handle_key_press(
             env_feedback, return_msg_id)
         temp_env_feedback, return_msg_id = simulator.execute_action(
             ai_message)
-        print(f"Env Feedback: {env_feedback}")
         print(f"AI Message: {ai_message}")
+        print("\n\n")
+        print(f"Env Feedback: {temp_env_feedback}")
         print("--------------------------------------------------")
         # Update the environment feedback
         env_feedback = temp_env_feedback
@@ -82,6 +83,7 @@ def handle_key_press(
         print(f"Wrong key press: {key.char}, Skipping...")
         print("Press 'Esc' to exit")
         print("Press 'c' to continue")
+
 
 def main() -> None:
     """Main function to run the script."""
