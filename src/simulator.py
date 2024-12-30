@@ -99,9 +99,11 @@ class PutObject(BaseModel):
     """
     Puts an object that has been picked in the agents hand.
     """
-    object_id: str = Field(
+    target_id: str = Field(
         metadata={"description": "The object id of the "
-                  "object that is on the agent hand."}
+                  "target receptable object "
+                  "(object which will recieve the object "
+                  "from the agent hands)"}
     )
 
 
@@ -168,8 +170,11 @@ class SimulatorBackend:
         Args:
             scene (str): The scene name to use.
         """
+        self._rotation_degrees = 30
         self._controller = Controller(
-            scene=scene, width=800, height=600)
+            scene=scene, width=800, height=600,
+            rotateStepDegrees=self._rotation_degrees,
+            snapToGrid=False)
 
     def get_available_actions(self) -> List[Callable]:
         """Returns the available actions within the simulator
@@ -359,22 +364,26 @@ class SimulatorBackend:
 
     @tool(args_schema=NoArgsSchema)
     def rotate_left(self) -> EnvironmentState:
-        """Rotates the agent left by 90 degrees
+        """Rotates the agent left by 20 degrees
 
         Returns:
             EnvironmentState: The environment state after executing the action.
         """
-        event = self._controller.step(action="RotateLeft")
+        event = self._controller.step(
+            action="RotateLeft",
+            degrees=self._rotation_degrees)
         return self.extract_environment_state_from_event(event)
 
     @tool(args_schema=NoArgsSchema)
     def rotate_right(self) -> EnvironmentState:
-        """Rotates the agent right by 90 degrees
+        """Rotates the agent right by 20 degrees
 
         Returns:
             EnvironmentState: The environment state after executing the action.
         """
-        event = self._controller.step(action="RotateRight")
+        event = self._controller.step(
+            action="RotateRight",
+            degrees=self._rotation_degrees)
         return self.extract_environment_state_from_event(event)
 
     @tool(args_schema=NoArgsSchema)
