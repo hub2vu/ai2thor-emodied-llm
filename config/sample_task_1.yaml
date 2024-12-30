@@ -3,16 +3,14 @@ simulator_config:
 llm_config:
   human_task: '
   Your Task is:
-  - search for the apple.
-  - pick the apple.
-  - go stand in front of the fridge, you should be facing the fridge door with less than 1.5 meters ahead.
-  - Ensure that you are directly facing the fridge door before attemping to open the fridge.
-  - open the fridge.
-  - put the apple in the fridge. 
-  - close the fridge.
-  - A fridge has the type fridge.
+  - pick up the potato.
+  - put it in the pot.
+  - pick up the pot.
+  - go and stand IN FRONT OF the "StoveBurner", So that you are FACING IT DIRECTLY.
+  - put the pot on the "StoveBurner". 
+  - toggle the "StoveKnob".
   '
-  model: 'gpt-4o'
+  model: 'gpt-4o-2024-11-20'
   system_task: '
   - You will control a Robot inside the simulator.
   - You will be given a task to do inside the simulator.
