@@ -5,6 +5,7 @@
 - This is a simple project that uses Chatgpt-4o to control a home robot.
 - The robot is tasked to do a simple cooking task to do it in a simulated home environment.
 - The project uses AI2Thor simulator and an iThor environment.
+- The project uses langchains to ineract with openai gpt-4o model.
 
 ## Installation
 
@@ -18,7 +19,12 @@ pip install -r requirements.txt
 ```
 
 ## Running
+
 ```bash
+# Source the virtual env
 source .venv/bin/activate
+# Add your Open AI Token
+export OPENAI_API_KEY=YOUR_OPEN_AI_PROJECT_TOKEN
+# Run the code
 python main.py --config-file config/sample_task_1.yaml
 ```
