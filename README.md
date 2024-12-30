@@ -28,3 +28,11 @@ export OPENAI_API_KEY=YOUR_OPEN_AI_PROJECT_TOKEN
 # Run the code
 python main.py --config-file config/sample_task_1.yaml
 ```
+
+## Demo
+
+This is a small demo video to demonstrate the project
+
+<a href="https://www.youtube.com/watch?v=h5cfa9WrGFQ" target="_blank">
+  <img src="https://img.youtube.com/vi/h5cfa9WrGFQ/maxresdefault.jpg" alt="Video Thumbnail" style="width:100%;max-width:640px;">
+</a>
