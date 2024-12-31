@@ -170,7 +170,7 @@ class SimulatorBackend:
         Args:
             scene (str): The scene name to use.
         """
-        self._rotation_degrees = 30
+        self._rotation_degrees = 90
         self._controller = Controller(
             scene=scene, width=800, height=600,
             rotateStepDegrees=self._rotation_degrees,
