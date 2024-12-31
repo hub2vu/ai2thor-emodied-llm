@@ -63,7 +63,7 @@ def handle_key_press(
     Handles the key press events for 'esc' and 'c'.
     """
     global env_feedback, return_msg_id
-    global agent, simulator
+    global agent, simulator, ai_message
     if key == keyboard.Key.esc:  # Exit if the 'Esc' key is pressed
         print("Exiting...")
         return False  # Stop the listener
@@ -71,6 +71,9 @@ def handle_key_press(
         print("Continuing...")
         ai_message = agent.send_environment_feedback(
             env_feedback, return_msg_id)
+        if len(ai_message.tool_calls) == 0:
+            print("End of episode .. exiting")
+            return False
         temp_env_feedback, return_msg_id = simulator.execute_action(
             ai_message)
         print(f"AI Message: {ai_message}")
@@ -79,10 +82,6 @@ def handle_key_press(
         print("--------------------------------------------------")
         # Update the environment feedback
         env_feedback = temp_env_feedback
-        if ai_message.tool_calls[0]['name'] == 'done':
-            print("AI has executed the done action")
-            print("End of episode")
-            exit(0)
     elif hasattr(key, 'char'):  # Handle other key presses
         print(f"Wrong key press: {key.char}, Skipping...")
         print("Press 'Esc' to exit")
@@ -95,7 +94,7 @@ def main() -> None:
     # I might have used a class
     # and stored them in the class state instead
     global env_feedback, return_msg_id
-    global agent, simulator
+    global agent, simulator, ai_message
 
     args = parse_args()
 
