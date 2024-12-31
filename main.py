@@ -79,6 +79,10 @@ def handle_key_press(
         print("--------------------------------------------------")
         # Update the environment feedback
         env_feedback = temp_env_feedback
+        if ai_message.tool_calls[0]['name'] == 'done':
+            print("AI has executed the done action")
+            print("End of episode")
+            exit(0)
     elif hasattr(key, 'char'):  # Handle other key presses
         print(f"Wrong key press: {key.char}, Skipping...")
         print("Press 'Esc' to exit")
