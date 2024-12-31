@@ -8,7 +8,7 @@ llm_config:
   - pick up the pot.
   - go and stand IN FRONT OF the "StoveBurner", So that you are FACING IT DIRECTLY.
   - put the pot on the "StoveBurner". 
-  - toggle the "StoveKnob".
+  - toggle the "StoveKnob" that is located on your far right.
   '
   model: 'gpt-4o-2024-11-20'
   system_task: '
