@@ -33,6 +33,6 @@ python main.py --config-file config/sample_task_1.yaml
 
 This is a small demo video to demonstrate the project
 
-<a href="https://www.youtube.com/watch?v=h5cfa9WrGFQ" target="_blank">
-  <img src="https://img.youtube.com/vi/h5cfa9WrGFQ/maxresdefault.jpg" alt="Video Thumbnail" style="width:100%;max-width:640px;">
+<a href="https://www.youtube.com/watch?v=AZHI45pB9r4" target="_blank">
+  <img src="https://img.youtube.com/vi/AZHI45pB9r4/maxresdefault.jpg" alt="Video Thumbnail" style="width:100%;max-width:640px;">
 </a>
