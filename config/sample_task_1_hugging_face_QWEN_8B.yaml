@@ -3,12 +3,14 @@ simulator_config:
 llm_config:
   human_task: '
   Your Task is:
-  - pick up the potato.
-  - put it in the pot.
-  - pick up the pot.
-  - go and stand IN FRONT OF the "StoveBurner", So that you are FACING IT DIRECTLY.
-  - put the pot on the "StoveBurner".
-  - toggle the "StoveKnob" that is located on your far right.
+  - Move To the "CounterTop"
+  - Pick up the "Potato".
+  - Put it in the "Pot".
+  - Pick up the "Pot".
+  - Rotate left to face the "StoveBurner".
+  - Put the pot on the "StoveBurner" that is located on your far right.
+  - Toggle the "StoveKnob" that is located on your far right.
+  - Call the done function.
   '
   backend: 'huggingface_remote'  # Options: together, huggingface, huggingface_remote, openai
   model: 'Qwen/Qwen3-VL-8B-Instruct'  # Vision-language model
@@ -28,7 +30,7 @@ llm_config:
   - With each response, explain your reasoning BEFORE the code block.
   - You can only execute ONE action per response.
 
-  IMPORTANT: The agent rotation is calculated clockwise.
+  IMPORTANT: The Z-axis is pointing down.
   IMPORTANT: Output your action as Python code in a ```python code block.
 
   Available simulator methods:

@@ -100,7 +100,7 @@ def handle_key_press(
             if exec_result.result is not None:
                 temp_env_feedback = exec_result.result
                 print(f"Action executed successfully")
-                print(f"Env Feedback: {temp_env_feedback}")
+                # print(f"Env Feedback: {temp_env_feedback}")
                 print("--------------------------------------------------")
                 # Update the environment feedback
                 env_feedback = temp_env_feedback
