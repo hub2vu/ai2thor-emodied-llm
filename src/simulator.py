@@ -10,9 +10,6 @@ import numpy as np
 from PIL import Image
 from ai2thor.controller import Controller
 from ai2thor.server import Event
-from langchain_core.tools import tool
-from langchain_core.tools.structured import StructuredTool
-from langchain_core.messages import AIMessage
 from pydantic.dataclasses import dataclass
 from pydantic import BaseModel, Field
 
@@ -224,23 +221,16 @@ class SimulatorBackend:
         }
 
     def execute_action(
-            self, ai_message: AIMessage) -> Tuple[EnvironmentState, str]:
-        """Executes the action from the specified message.
+            self, env_state: EnvironmentState) -> EnvironmentState:
+        """Returns the environment state (used for compatibility).
 
         Args:
-            ai_message (AIMessage): The AI message to execute the calls from.
+            env_state (EnvironmentState): The environment state from action execution.
 
         Returns:
-            Tuple[EnvironmentState, str]: The environment feedback
-                and the executed action id.
+            EnvironmentState: The environment feedback.
         """
-        tool_callback_dict = ai_message.tool_calls[0]
-        call_id = tool_callback_dict["id"]
-        func_name = tool_callback_dict['name']
-        func_args = tool_callback_dict['args']
-        tool: StructuredTool = getattr(self, func_name)
-        env_feedback = tool.func(self, **func_args)
-        return (env_feedback, call_id)
+        return env_state
 
     @staticmethod
     def extract_environment_state_from_event(event: Event) -> EnvironmentState:
@@ -322,7 +312,6 @@ class SimulatorBackend:
         event = self._controller.step(action="Initialize")
         return self.extract_environment_state_from_event(event)
 
-    @tool(args_schema=NoArgsSchema)
     def move_back(self) -> EnvironmentState:
         """Moves the agent backward by 0.25 meters
 
@@ -332,7 +321,6 @@ class SimulatorBackend:
         event = self._controller.step(action="MoveBack")
         return self.extract_environment_state_from_event(event)
 
-    @tool(args_schema=NoArgsSchema)
     def move_ahead(self) -> EnvironmentState:
         """Moves the agent forward by 0.25 meters
 
@@ -342,7 +330,6 @@ class SimulatorBackend:
         event = self._controller.step(action="MoveAhead")
         return self.extract_environment_state_from_event(event)
 
-    @tool(args_schema=NoArgsSchema)
     def move_left(self) -> EnvironmentState:
         """Moves the agent left by 0.25 meters
 
@@ -352,7 +339,6 @@ class SimulatorBackend:
         event = self._controller.step(action="MoveLeft")
         return self.extract_environment_state_from_event(event)
 
-    @tool(args_schema=NoArgsSchema)
     def move_right(self) -> EnvironmentState:
         """Moves the agent right by 0.25 meters
 
@@ -362,7 +348,6 @@ class SimulatorBackend:
         event = self._controller.step(action="MoveRight")
         return self.extract_environment_state_from_event(event)
 
-    @tool(args_schema=NoArgsSchema)
     def rotate_left(self) -> EnvironmentState:
         """Rotates the agent left by 20 degrees
 
@@ -374,7 +359,6 @@ class SimulatorBackend:
             degrees=self._rotation_degrees)
         return self.extract_environment_state_from_event(event)
 
-    @tool(args_schema=NoArgsSchema)
     def rotate_right(self) -> EnvironmentState:
         """Rotates the agent right by 20 degrees
 
@@ -386,7 +370,6 @@ class SimulatorBackend:
             degrees=self._rotation_degrees)
         return self.extract_environment_state_from_event(event)
 
-    @tool(args_schema=NoArgsSchema)
     def done(self) -> EnvironmentState:
         """Indicates that the task has been completed.
 
@@ -396,7 +379,6 @@ class SimulatorBackend:
         event = self._controller.step(action="Done")
         return self.extract_environment_state_from_event(event)
 
-    @tool(args_schema=PickObject)
     def pick_object(self, object_id: str) -> EnvironmentState:
         """Pick up an object and place it in the agents hand, the
         object must be visible and within the agents reach.
@@ -414,7 +396,6 @@ class SimulatorBackend:
             manualInteract=False)
         return self.extract_environment_state_from_event(event)
 
-    @tool(args_schema=PutObject)
     def put_object(self, target_id: str) -> EnvironmentState:
         """Puts an object that has been picked in the agents hand.
 
@@ -432,7 +413,6 @@ class SimulatorBackend:
             placeStationary=True)
         return self.extract_environment_state_from_event(event)
 
-    @tool(args_schema=OpenObject)
     def open_object(self, object_id: str) -> EnvironmentState:
         """Opens an object like a frdige or microwave.
 
@@ -450,7 +430,6 @@ class SimulatorBackend:
             forceAction=False)
         return self.extract_environment_state_from_event(event)
 
-    @tool(args_schema=CloseObject)
     def close_object(self, object_id: str) -> EnvironmentState:
         """Closes an object like a frdige or microwave.
 
@@ -468,7 +447,6 @@ class SimulatorBackend:
             forceAction=False)
         return self.extract_environment_state_from_event(event)
 
-    @tool(args_schema=ToggleObjectOn)
     def toggle_object_on(self, object_id: str) -> EnvironmentState:
         """Toggles on an object like a microwave.
 
@@ -484,7 +462,6 @@ class SimulatorBackend:
             forceAction=False)
         return self.extract_environment_state_from_event(event)
 
-    @tool(args_schema=ToggleObjectOff)
     def toggle_object_off(self, object_id: str) -> EnvironmentState:
         """Toggles off an object like a microwave.
 

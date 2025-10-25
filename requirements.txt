@@ -1,5 +1,10 @@
 ai2thor
 langchain-openai
+langchain-together
+langchain-huggingface
+transformers
+torch
+accelerate
 pynput
 Pillow
 numpy

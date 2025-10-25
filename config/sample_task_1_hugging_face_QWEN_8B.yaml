@@ -10,17 +10,14 @@ llm_config:
   - put the pot on the "StoveBurner".
   - toggle the "StoveKnob" that is located on your far right.
   '
-  backend: 'together'  # Options: together, huggingface, openai
-  model: 'meta-llama/Llama-3.2-11B-Vision-Instruct-Turbo'
-  # For huggingface backend, you can add:
-  # device: 'cuda'  # or 'cpu'
-  # model_kwargs:
-  #   max_new_tokens: 512
-  #   temperature: 0.1
-  #   do_sample: true
-  #   torch_dtype: 'float16'
-  #   load_in_8bit: false
-  #   load_in_4bit: false
+  backend: 'huggingface_remote'  # Options: together, huggingface, huggingface_remote, openai
+  model: 'Qwen/Qwen3-VL-8B-Instruct'  # Vision-language model
+  # device: not needed for remote backends (together, huggingface_remote, openai)
+  model_kwargs:
+    max_new_tokens: 512
+    temperature: 0.1
+    do_sample: False
+    timeout: 120  # seconds for API timeout
   system_task: '
   - You are controlling a Robot inside a simulator environment.
   - You will be given a task to complete inside the simulator.

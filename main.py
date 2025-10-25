@@ -11,6 +11,7 @@ from src.simulator import (
     QueryReturn
 )
 from src.llm_agent import LLMAgent
+from src.code_executor import CodeExecutor
 
 
 def parse_args():
@@ -62,26 +63,52 @@ def handle_key_press(
     """
     Handles the key press events for 'esc' and 'c'.
     """
-    global env_feedback, return_msg_id
-    global agent, simulator, ai_message
+    global env_feedback, execution_result
+    global agent, simulator, code_executor, ai_message
     if key == keyboard.Key.esc:  # Exit if the 'Esc' key is pressed
         print("Exiting...")
         return False  # Stop the listener
     elif hasattr(key, 'char') and key.char == 'c':  # Check for 'c' key
         print("Continuing...")
+
+        # Send environment feedback to LLM
         ai_message = agent.send_environment_feedback(
-            env_feedback, return_msg_id)
-        if len(ai_message.tool_calls) == 0:
-            print("End of episode .. exiting")
-            return False
-        temp_env_feedback, return_msg_id = simulator.execute_action(
-            ai_message)
-        print(f"AI Message: {ai_message}")
-        print("\n\n")
-        print(f"Env Feedback: {temp_env_feedback}")
-        print("--------------------------------------------------")
-        # Update the environment feedback
-        env_feedback = temp_env_feedback
+            env_feedback, execution_result)
+
+        # Extract content as string
+        content = ai_message.content
+        if isinstance(content, list):
+            # If content is a list, join text parts
+            content = " ".join([part if isinstance(part, str) else str(part.get('text', ''))
+                              for part in content])
+
+        print(f"AI Message: {content}")
+        print("\n")
+
+        # Parse and execute the generated code
+        exec_result = code_executor.parse_and_execute(content)
+
+        if not exec_result.success:
+            print(f"Execution Error: {exec_result.error}")
+            execution_result = str(exec_result)
+            # Check if it's a "no code found" error - might indicate task completion
+            if exec_result.error and "No executable code found" in exec_result.error:
+                print("No code found - task may be complete. Exiting...")
+                return False
+        else:
+            # Execution succeeded - result should be an EnvironmentState
+            if exec_result.result is not None:
+                temp_env_feedback = exec_result.result
+                print(f"Action executed successfully")
+                print(f"Env Feedback: {temp_env_feedback}")
+                print("--------------------------------------------------")
+                # Update the environment feedback
+                env_feedback = temp_env_feedback
+                execution_result = None  # Clear execution result on success
+            else:
+                print("Warning: Code executed but no result returned")
+                execution_result = "Code executed but returned None"
+
     elif hasattr(key, 'char'):  # Handle other key presses
         print(f"Wrong key press: {key.char}, Skipping...")
         print("Press 'Esc' to exit")
@@ -90,11 +117,11 @@ def handle_key_press(
 
 def main() -> None:
     """Main function to run the script."""
-    # I had to do that to make them accessible from the listiner function,
+    # I had to do that to make them accessible from the listener function,
     # I might have used a class
     # and stored them in the class state instead
-    global env_feedback, return_msg_id
-    global agent, simulator, ai_message
+    global env_feedback, execution_result
+    global agent, simulator, code_executor, ai_message
 
     args = parse_args()
 
@@ -104,10 +131,16 @@ def main() -> None:
     simulator_config = config['simulator_config']
     simulator = SimulatorBackend(**simulator_config)
     agent_config = config['llm_config']
-    agent = LLMAgent(
-        tools=simulator.get_available_actions(), **agent_config)
+
+    # Create LLM agent (no longer needs tools parameter)
+    agent = LLMAgent(**agent_config)
+
+    # Create code executor with simulator instance
+    code_executor = CodeExecutor(simulator)
+
+    # Initialize simulator and get initial state
     env_feedback = simulator.initailize_simulator()
-    return_msg_id = ''
+    execution_result = None
     # while True:
     #     print("press esc to exit")
     #     print("press c to continue")
