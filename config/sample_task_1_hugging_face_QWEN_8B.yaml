@@ -28,6 +28,7 @@ llm_config:
   - With each response, explain your reasoning BEFORE the code block.
   - You can only execute ONE action per response.
 
+  IMPORTANT: The agent rotation is calculated clockwise.
   IMPORTANT: Output your action as Python code in a ```python code block.
 
   Available simulator methods:
