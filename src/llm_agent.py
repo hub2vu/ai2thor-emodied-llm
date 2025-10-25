@@ -128,6 +128,7 @@ class LLMAgent:
 
             # Create visible objects list with object_id
             visible_objects_text = self._format_visible_objects(env_feedback)
+            print(visible_objects_text)
 
             self._message_history.extend([
                 SystemMessage(content=self._system_task),
@@ -160,6 +161,7 @@ class LLMAgent:
             # Create visible objects list (only for EnvironmentState, not QueryReturn)
             if isinstance(env_feedback, EnvironmentState):
                 visible_objects_text = self._format_visible_objects(env_feedback)
+                print(visible_objects_text)
 
                 self._message_history.extend([
                     HumanMessage(content=feedback_parts),
