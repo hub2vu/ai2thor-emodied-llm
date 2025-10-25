@@ -477,6 +477,22 @@ class SimulatorBackend:
             forceAction=False)
         return self.extract_environment_state_from_event(event)
 
+    def slice_object(self, object_id: str) -> EnvironmentState:
+        """Slices an object like bread, potato, or other sliceable items.
+
+        Args:
+            object_id (str): The object id for the object to slice.
+                The object must be visible and within reach.
+
+        Returns:
+            EnvironmentState: The environment state after executing the action.
+        """
+        event = self._controller.step(
+            action="SliceObject",
+            objectId=object_id,
+            forceAction=False)
+        return self.extract_environment_state_from_event(event)
+
     # @tool(args_schema=QueryObject)
     # def query_object(self, x: float, y: float) -> QueryReturn:
     #     """Queries the object specified by the x, y coordinates
