@@ -173,7 +173,7 @@ class SimulatorBackend:
             width=800,
             height=600,
             rotateStepDegrees=self._rotation_degrees,
-            snapToGrid=False,
+            snapToGrid=True,
             renderImage=True,           # Explicitly enable image rendering
             visibilityDistance=1.5      # Match interaction distance
         )
