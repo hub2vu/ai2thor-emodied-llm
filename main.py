@@ -4,6 +4,7 @@
 from typing import Union
 import argparse
 import yaml
+import time
 from pynput import keyboard
 
 from src.simulator import (
@@ -87,6 +88,7 @@ def handle_key_press(
 
         # Parse and execute the generated code
         exec_result = code_executor.parse_and_execute(content)
+        time.sleep(1.0)
 
         if not exec_result.success:
             print(f"Execution Error: {exec_result.error}")
@@ -165,8 +167,18 @@ def main() -> None:
     #             env_feedback = temp_env_feedback
     #         else:
     #             print(f"wrong key press: {event.name}, Skipping...")
-    with keyboard.Listener(on_press=handle_key_press) as listener:
-        listener.join()
+
+    listener = keyboard.Listener(on_press=handle_key_press)
+    listener.daemon = False  # Not a daemon - we want main to exit if listener exits
+    listener.start()
+
+    # Monitor the listener thread - exit if it stops running
+    try:
+        while listener.is_alive():
+            time.sleep(5.0) # Check every 0.5 seconds
+    except KeyboardInterrupt:
+        print("\nInterrupted by user")
+        listener.stop()
 
 
 if __name__ == "__main__":

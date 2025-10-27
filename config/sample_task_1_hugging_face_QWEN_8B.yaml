@@ -3,24 +3,18 @@ simulator_config:
 llm_config:
   human_task: '
   Your Task is:
-  - Move To the "CounterTop"
-  - Pick up the "Potato".
-  - Put it in the "Pot".
-  - Pick up the "Pot".
-  - Rotate left to face the "StoveBurner".
-  - Put the pot on the first visible "StoveBurner".
-  - Toggle the last "StoveKnob".
-  - Toggle the same "StoveKnob" again to finish the cooking of the potato.
-  - Pick up the "Pot"
   - Rotate right.
-  - Put the "Pot" on the "CounterTop".
-  - Pick up the "Potato".
-  - Rotate right again.
-  - Execute the Move forward for 5 timesteps.
-  - Put the "Potato" in the "Plate".
+  - Move Ahead 10 times.
+  - Rotate Right.
+  - Open The Fridge.
+  - Pick the tomato.
+  - Close the Fridge.
+  - Rotate Right.
+  - Move To the CounterTop.
+  - Put the Tomato in the Pot.
   '
   backend: 'huggingface_remote'  # Options: together, huggingface, huggingface_remote, openai
-  model: 'Qwen/Qwen3-VL-8B-Instruct'  # Vision-language model
+  model: 'Qwen/Qwen3-VL-30B-A3B-Instruct'  # Vision-language model
   # device: not needed for remote backends (together, huggingface_remote, openai)
   model_kwargs:
     max_new_tokens: 512
@@ -35,9 +29,8 @@ llm_config:
   - You will also receive screenshots from the simulator to help you navigate.
   - After completing your task, call simulator.done() to indicate completion.
   - With each response, explain your reasoning BEFORE the code block.
-  - You can only execute ONE action per response.
   - Only Use objects from the visible_objects do not make up object ids.
-  - State the color of the object you are trying to use in each timestep. 
+  - use for loop to repeat the same action more than once.
 
   IMPORTANT: Output your action as Python code in a ```python code block.
 

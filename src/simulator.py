@@ -169,9 +169,14 @@ class SimulatorBackend:
         """
         self._rotation_degrees = 90
         self._controller = Controller(
-            scene=scene, width=800, height=600,
+            scene=scene,
+            width=800,
+            height=600,
             rotateStepDegrees=self._rotation_degrees,
-            snapToGrid=False)
+            snapToGrid=False,
+            renderImage=True,           # Explicitly enable image rendering
+            visibilityDistance=1.5      # Match interaction distance
+        )
 
     def get_available_actions(self) -> List[Callable]:
         """Returns the available actions within the simulator
@@ -308,8 +313,17 @@ class SimulatorBackend:
         data_url = f"data:image/jpeg;base64,{img_base64}"
         return data_url
 
+    def _force_render_update(self) -> None:
+        """Force Unity to flush the render buffer by executing a Pass action.
+
+        This is needed on Linux where Unity's VSync can cause the display to
+        only update every 2 actions due to double-buffering.
+        """
+        self._controller.step(action="Pass")
+
     def initailize_simulator(self) -> EnvironmentState:
         event = self._controller.step(action="Initialize")
+        self._force_render_update()  # Force immediate display update
         return self.extract_environment_state_from_event(event)
 
     def move_back(self) -> EnvironmentState:
@@ -319,6 +333,7 @@ class SimulatorBackend:
             EnvironmentState: The environment state after executing the action.
         """
         event = self._controller.step(action="MoveBack")
+        self._force_render_update()  # Force immediate display update
         return self.extract_environment_state_from_event(event)
 
     def move_ahead(self) -> EnvironmentState:
@@ -328,6 +343,7 @@ class SimulatorBackend:
             EnvironmentState: The environment state after executing the action.
         """
         event = self._controller.step(action="MoveAhead")
+        self._force_render_update()  # Force immediate display update
         return self.extract_environment_state_from_event(event)
 
     def move_left(self) -> EnvironmentState:
@@ -337,6 +353,7 @@ class SimulatorBackend:
             EnvironmentState: The environment state after executing the action.
         """
         event = self._controller.step(action="MoveLeft")
+        self._force_render_update()  # Force immediate display update
         return self.extract_environment_state_from_event(event)
 
     def move_right(self) -> EnvironmentState:
@@ -346,6 +363,7 @@ class SimulatorBackend:
             EnvironmentState: The environment state after executing the action.
         """
         event = self._controller.step(action="MoveRight")
+        self._force_render_update()  # Force immediate display update
         return self.extract_environment_state_from_event(event)
 
     def rotate_left(self) -> EnvironmentState:
@@ -357,6 +375,7 @@ class SimulatorBackend:
         event = self._controller.step(
             action="RotateLeft",
             degrees=self._rotation_degrees)
+        self._force_render_update()  # Force immediate display update
         return self.extract_environment_state_from_event(event)
 
     def rotate_right(self) -> EnvironmentState:
@@ -368,6 +387,7 @@ class SimulatorBackend:
         event = self._controller.step(
             action="RotateRight",
             degrees=self._rotation_degrees)
+        self._force_render_update()  # Force immediate display update
         return self.extract_environment_state_from_event(event)
 
     def done(self) -> EnvironmentState:
@@ -377,6 +397,7 @@ class SimulatorBackend:
             EnvironmentState: The environment state after executing the action.
         """
         event = self._controller.step(action="Done")
+        self._force_render_update()  # Force immediate display update
         return self.extract_environment_state_from_event(event)
 
     def pick_object(self, object_id: str) -> EnvironmentState:
@@ -394,6 +415,7 @@ class SimulatorBackend:
             objectId=object_id,
             forceAction=False,
             manualInteract=False)
+        self._force_render_update()  # Force immediate display update
         return self.extract_environment_state_from_event(event)
 
     def put_object(self, target_id: str) -> EnvironmentState:
@@ -411,6 +433,7 @@ class SimulatorBackend:
             objectId=target_id,
             forceAction=False,
             placeStationary=True)
+        self._force_render_update()  # Force immediate display update
         return self.extract_environment_state_from_event(event)
 
     def open_object(self, object_id: str) -> EnvironmentState:
@@ -428,6 +451,7 @@ class SimulatorBackend:
             objectId=object_id,
             openness=1,
             forceAction=False)
+        self._force_render_update()  # Force immediate display update
         return self.extract_environment_state_from_event(event)
 
     def close_object(self, object_id: str) -> EnvironmentState:
@@ -443,8 +467,8 @@ class SimulatorBackend:
         event = self._controller.step(
             action="CloseObject",
             objectId=object_id,
-            openness=1,
             forceAction=False)
+        self._force_render_update()  # Force immediate display update
         return self.extract_environment_state_from_event(event)
 
     def toggle_object_on(self, object_id: str) -> EnvironmentState:
@@ -460,6 +484,7 @@ class SimulatorBackend:
             action="ToggleObjectOn",
             objectId=object_id,
             forceAction=False)
+        self._force_render_update()  # Force immediate display update
         return self.extract_environment_state_from_event(event)
 
     def toggle_object_off(self, object_id: str) -> EnvironmentState:
@@ -475,6 +500,7 @@ class SimulatorBackend:
             action="ToggleObjectOff",
             objectId=object_id,
             forceAction=False)
+        self._force_render_update()  # Force immediate display update
         return self.extract_environment_state_from_event(event)
 
     def slice_object(self, object_id: str) -> EnvironmentState:
@@ -491,6 +517,7 @@ class SimulatorBackend:
             action="SliceObject",
             objectId=object_id,
             forceAction=False)
+        self._force_render_update()  # Force immediate display update
         return self.extract_environment_state_from_event(event)
 
     # @tool(args_schema=QueryObject)

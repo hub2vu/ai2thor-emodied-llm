@@ -8,3 +8,4 @@ accelerate
 pynput
 Pillow
 numpy
+vLLM

@@ -9,8 +9,10 @@ from langchain_core.messages import (
     AIMessage, SystemMessage,
     HumanMessage,
 )
+from langchain_core.language_models import BaseChatModel
 import torch
 from huggingface_hub import InferenceClient
+from transformers import AutoProcessor, AutoModelForVision2Seq, pipeline
 
 from src.simulator import EnvironmentState, QueryReturn
 
@@ -48,7 +50,7 @@ class LLMAgent:
                 max_retries=2,
             )
         elif backend == "huggingface":
-            # Local HuggingFace model execution
+            # Local HuggingFace model execution (text-only models)
             # Determine device
             if device is None:
                 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -67,6 +69,35 @@ class LLMAgent:
                     "torch_dtype": getattr(torch, model_kwargs.get("torch_dtype", "float16")),
                     "load_in_8bit": model_kwargs.get("load_in_8bit", False),
                     "load_in_4bit": model_kwargs.get("load_in_4bit", False),
+                }
+            )
+            self._llm = ChatHuggingFace(llm=hf_pipeline)
+        elif backend == "huggingface_vlm":
+            # Local HuggingFace Vision-Language Model execution
+            # Determine device
+            if device is None:
+                device = "cuda" if torch.cuda.is_available() else "cpu"
+
+            # Load VL model with image-text-to-text pipeline
+            pipe = pipeline(
+                "image-text-to-text",
+                model=model,
+                device=device if device == "cpu" else 0,  # 0 for cuda:0
+                torch_dtype=getattr(torch, model_kwargs.get("torch_dtype", "float16")) if device == "cuda" else torch.float32,
+                trust_remote_code=True,
+                model_kwargs={
+                    "load_in_8bit": model_kwargs.get("load_in_8bit", False),
+                    "load_in_4bit": model_kwargs.get("load_in_4bit", False),
+                }
+            )
+
+            # Wrap in HuggingFacePipeline
+            hf_pipeline = HuggingFacePipeline(
+                pipeline=pipe,
+                pipeline_kwargs={
+                    "max_new_tokens": model_kwargs.get("max_new_tokens", 512),
+                    "temperature": model_kwargs.get("temperature", 0.1),
+                    "do_sample": model_kwargs.get("do_sample", False),
                 }
             )
             self._llm = ChatHuggingFace(llm=hf_pipeline)
@@ -91,7 +122,7 @@ class LLMAgent:
             )
         else:
             raise ValueError(f"Unsupported backend: {backend}. "
-                           f"Choose from: together, huggingface, huggingface_remote, openai")
+                           f"Choose from: together, huggingface, huggingface_vlm, huggingface_remote, openai")
 
     def _format_visible_objects(self, env_feedback: EnvironmentState) -> str:
         """Format visible objects list as a human-readable string.
