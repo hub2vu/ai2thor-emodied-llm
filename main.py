@@ -175,7 +175,7 @@ def main() -> None:
     # Monitor the listener thread - exit if it stops running
     try:
         while listener.is_alive():
-            time.sleep(5.0) # Check every 0.5 seconds
+            listener.join(0.5) # Check every 0.5 seconds
     except KeyboardInterrupt:
         print("\nInterrupted by user")
         listener.stop()
