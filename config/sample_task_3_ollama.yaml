@@ -22,7 +22,7 @@ llm_config:
   model_kwargs:
     base_url: 'http://192.168.1.77:11434'
     max_new_tokens: 20000
-    temperature: 0.3
+    temperature: 0.0
     num_ctx: 100000  # Context window size
     top_p: 0.9
     top_k: 40
