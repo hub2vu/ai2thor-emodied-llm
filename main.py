@@ -78,12 +78,15 @@ def process_ai_step():
         content = " ".join([part if isinstance(part, str) else str(part.get('text', ''))
                           for part in content])
 
-    print(f"AI Message: {content}")
+    print(f"\nAI Message: {content}")
     print("\n")
 
     # Parse and execute the generated code
     exec_result = code_executor.parse_and_execute(content)
     time.sleep(1.0)
+    if "simulator.done()" in content:
+        global should_exit
+        should_exit = True
 
     if not exec_result.success:
         print(f"Execution Error: {exec_result.error}")

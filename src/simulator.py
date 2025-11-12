@@ -396,8 +396,13 @@ class SimulatorBackend:
         Returns:
             EnvironmentState: The environment state after executing the action.
         """
+        global should_exit
         event = self._controller.step(action="Done")
         self._force_render_update()  # Force immediate display update
+        print("Done Action has been called .. mission finished .. exiting!!.")
+        self._controller.stop()
+        should_exit = True
+        exit(0)
         return self.extract_environment_state_from_event(event)
 
     def pick_object(self, object_id: str) -> EnvironmentState:
