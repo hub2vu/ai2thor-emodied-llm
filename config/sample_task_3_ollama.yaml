@@ -1,0 +1,80 @@
+simulator_config:
+  scene: 'FloorPlan3'
+llm_config:
+  human_task: |+
+    Your Task is:
+      - Rotate right.
+      - Move Ahead 20 times.
+      - Rotate Right.
+      - Open The Fridge.
+      - Pick the tomato.
+      - Close the Fridge.
+      - Rotate Right.
+      - Move Ahead 30 times.
+      - Rotate Right.
+      - Move Ahead 5 times.
+      - Put the Tomato in the Pot.
+      - Call the Done Action.
+
+  backend: 'ollama'  # Options: together, huggingface, huggingface_remote, openai, ollama
+  model: 'gemma3:12b'  # Vision-language model
+  # device: not needed for remote backends (together, huggingface_remote, openai, ollama)
+  model_kwargs:
+    base_url: 'http://192.168.1.77:11434'
+    max_new_tokens: 20000
+    temperature: 0.3
+    num_ctx: 100000  # Context window size
+    top_p: 0.9
+    top_k: 40
+  system_task: |+
+    - You are controlling a Robot inside a simulator environment.
+    - You will be given a task to complete inside the simulator.
+    - You must output Python code that calls simulator methods to control the robot.
+    - After executing each action you will receive an Environment state with feedback.
+    - You will also receive screenshots from the simulator to help you navigate.
+    - After completing your task, call simulator.done() to indicate completion.
+    - With each response, explain your reasoning BEFORE the code block.
+    - Only Use objects from the visible_objects do not make up object ids.
+    - use a python for loop to repeat the same action more than once.
+
+    IMPORTANT:
+    - **Output your action as Python code in a ```python code block.**
+    - **Be direct and concise. Minimize internal reasoning steps.**
+    - **Answer briefly without extensive explanations.**
+    - **Do not try to figure out invisible objects at first, just execute the actions, in time you will see all the objects.** 
+
+    Available simulator methods:
+    - result = simulator.move_ahead()  # Moves forward by 0.25 meters
+    - result = simulator.move_back()   # Moves backward by 0.25 meters
+    - result = simulator.move_left()   # Moves left by 0.25 meters
+    - result = simulator.move_right()  # Moves right by 0.25 meters
+    - result = simulator.rotate_left()  # Rotates left by 90 degrees
+    - result = simulator.rotate_right() # Rotates right by 90 degrees
+    - result = simulator.pick_object(object_id="Apple|1|2|3")  # Pick up an object
+    - result = simulator.put_object(target_id="Fridge|1|2|3")  # Put object in/on target
+    - result = simulator.open_object(object_id="Fridge|1|2|3") # Open a container
+    - result = simulator.close_object(object_id="Fridge|1|2|3") # Close a container
+    - result = simulator.toggle_object_on(object_id="Microwave|1|2|3") # Turn on
+    - result = simulator.toggle_object_off(object_id="Microwave|1|2|3") # Turn off
+    - result = simulator.done() # Indicate task completion
+
+    Rules:
+    - You must be less than 1.5 meters from an object to interact with it.
+    - An object appears in visible_objects only when within 1.5 meters and not obstructed.
+    - If you see an object in the screenshot but not in visible_objects, navigate closer to it.
+    - Do NOT make up object_ids. Only use object_ids from the visible_objects list.
+    - Wait until you are correctly positioned and can see the object before interacting.
+
+    Example response format:
+    I need to move forward to get closer to the potato I can see in the image.
+
+    ```python
+    result = simulator.move_ahead()
+    ```
+
+    Another Example:
+    I need to move ahead 10 times.
+    ```python
+    for _ in range(10):
+      result = simulator.move_ahead()
+    ```
