@@ -59,62 +59,80 @@ def read_yaml_file(file_path: str) -> dict:
         raise e
 
 
+def process_ai_step():
+    """
+    Processes one AI step: sends feedback to LLM and executes generated code.
+    Returns False if should exit, True otherwise.
+    """
+    global env_feedback, execution_result
+    global agent, simulator, code_executor, ai_message
+
+    # Send environment feedback to LLM
+    ai_message = agent.send_environment_feedback(
+        env_feedback, execution_result)
+
+    # Extract content as string
+    content = ai_message.content
+    if isinstance(content, list):
+        # If content is a list, join text parts
+        content = " ".join([part if isinstance(part, str) else str(part.get('text', ''))
+                          for part in content])
+
+    print(f"AI Message: {content}")
+    print("\n")
+
+    # Parse and execute the generated code
+    exec_result = code_executor.parse_and_execute(content)
+    time.sleep(1.0)
+
+    if not exec_result.success:
+        print(f"Execution Error: {exec_result.error}")
+        execution_result = str(exec_result)
+        # Check if it's a "no code found" error - might indicate task completion
+        if exec_result.error and "No executable code found" in exec_result.error:
+            print("No code found - task may be complete. Exiting...")
+            return False
+    else:
+        # Execution succeeded - result should be an EnvironmentState
+        if exec_result.result is not None:
+            temp_env_feedback = exec_result.result
+            print(f"Action executed successfully")
+            # print(f"Env Feedback: {temp_env_feedback}")
+            print("--------------------------------------------------")
+            # Update the environment feedback
+            env_feedback = temp_env_feedback
+            execution_result = None  # Clear execution result on success
+        else:
+            print("Warning: Code executed but no result returned")
+            execution_result = "Code executed but returned None"
+
+    return True
+
+
 def handle_key_press(
         key: keyboard.KeyCode):
     """
     Handles the key press events for 'esc' and 'c'.
     """
-    global env_feedback, execution_result
-    global agent, simulator, code_executor, ai_message
+    global should_exit, last_key_time, key_pressed
+
     if key == keyboard.Key.esc:  # Exit if the 'Esc' key is pressed
         print("Exiting...")
+        should_exit = True
         return False  # Stop the listener
     elif hasattr(key, 'char') and key.char == 'c':  # Check for 'c' key
         print("Continuing...")
+        key_pressed = True
+        last_key_time = time.time()
 
-        # Send environment feedback to LLM
-        ai_message = agent.send_environment_feedback(
-            env_feedback, execution_result)
-
-        # Extract content as string
-        content = ai_message.content
-        if isinstance(content, list):
-            # If content is a list, join text parts
-            content = " ".join([part if isinstance(part, str) else str(part.get('text', ''))
-                              for part in content])
-
-        print(f"AI Message: {content}")
-        print("\n")
-
-        # Parse and execute the generated code
-        exec_result = code_executor.parse_and_execute(content)
-        time.sleep(1.0)
-
-        if not exec_result.success:
-            print(f"Execution Error: {exec_result.error}")
-            execution_result = str(exec_result)
-            # Check if it's a "no code found" error - might indicate task completion
-            if exec_result.error and "No executable code found" in exec_result.error:
-                print("No code found - task may be complete. Exiting...")
-                return False
-        else:
-            # Execution succeeded - result should be an EnvironmentState
-            if exec_result.result is not None:
-                temp_env_feedback = exec_result.result
-                print(f"Action executed successfully")
-                # print(f"Env Feedback: {temp_env_feedback}")
-                print("--------------------------------------------------")
-                # Update the environment feedback
-                env_feedback = temp_env_feedback
-                execution_result = None  # Clear execution result on success
-            else:
-                print("Warning: Code executed but no result returned")
-                execution_result = "Code executed but returned None"
+        if not process_ai_step():
+            should_exit = True
+            return False
 
     elif hasattr(key, 'char'):  # Handle other key presses
         print(f"Wrong key press: {key.char}, Skipping...")
         print("Press 'Esc' to exit")
-        print("Press 'c' to continue")
+        print("Press 'c' to continue (or wait 1 second for auto-continue)")
 
 
 def main() -> None:
@@ -124,6 +142,7 @@ def main() -> None:
     # and stored them in the class state instead
     global env_feedback, execution_result
     global agent, simulator, code_executor, ai_message
+    global should_exit, last_key_time, key_pressed
 
     args = parse_args()
 
@@ -143,41 +162,39 @@ def main() -> None:
     # Initialize simulator and get initial state
     env_feedback = simulator.initailize_simulator()
     execution_result = None
-    # while True:
-    #     print("press esc to exit")
-    #     print("press c to continue")
-    #     event = keyboard.read_event()  # Wait for a keyboard event
-    #     if event.event_type == "down":  # Only capture key down events
-    #         print(f"Key pressed: {event.name}")
-    #         if event.name == "esc":  # Exit if the 'Esc' key is pressed
-    #             print("Exiting...")
-    #             break
-    #         elif event.name == "c":
-    #             print("Continuing...")
-    #             ai_message = agent.send_environment_feedback(
-    #                 env_feedback, return_msg_id)
-    #             # make the simulator execute the agent action in temp_state
-    #             temp_env_feedback, return_msg_id = simulator.execute_action(
-    #                 ai_message)
-    #             # print the first env feedback and the agent message
-    #             print(f"Env Feedback: {env_feedback}")
-    #             print(f"AI Message: {ai_message}")
-    #             print("--------------------------------------------------")
-    #             # put the temp state in the env_feedback
-    #             env_feedback = temp_env_feedback
-    #         else:
-    #             print(f"wrong key press: {event.name}, Skipping...")
+
+    # Initialize control variables
+    should_exit = False
+    last_key_time = time.time()
+    key_pressed = False
 
     listener = keyboard.Listener(on_press=handle_key_press)
     listener.daemon = False  # Not a daemon - we want main to exit if listener exits
     listener.start()
 
-    # Monitor the listener thread - exit if it stops running
+    print("Press 'Esc' to exit")
+    print("Press 'c' to continue (or wait 1 second for auto-continue)")
+
+    # Monitor the listener thread and implement auto-continue
     try:
-        while listener.is_alive():
-            listener.join(0.5) # Check every 0.5 seconds
+        while listener.is_alive() and not should_exit:
+            current_time = time.time()
+
+            # Check if 1 second has passed since last key press
+            if current_time - last_key_time >= 1.0:
+                print("Auto-continuing after 1 second...")
+                last_key_time = current_time
+
+                if not process_ai_step():
+                    should_exit = True
+                    break
+
+            time.sleep(0.1)  # Check every 0.1 seconds for responsiveness
+
     except KeyboardInterrupt:
         print("\nInterrupted by user")
+
+    finally:
         listener.stop()
 
 
