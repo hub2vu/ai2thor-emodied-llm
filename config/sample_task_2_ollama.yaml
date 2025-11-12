@@ -9,7 +9,7 @@ llm_config:
     - go and stand IN FRONT OF the "StoveBurner", So that you are FACING IT DIRECTLY.
     - put the pot on the "StoveBurner".
     - toggle the "StoveKnob" that is located on your far right.
-    - call the done action
+    - call the Done Action.
 
   backend: 'ollama'  # Options: together, huggingface, huggingface_remote, openai, ollama
   model: 'gemma3:12b'  # Vision-language model
@@ -17,7 +17,7 @@ llm_config:
   model_kwargs:
     base_url: 'http://192.168.1.77:11434'
     max_new_tokens: 20000
-    temperature: 0.3
+    temperature: 0.0
     num_ctx: 100000  # Context window size
     top_p: 0.9
     top_k: 40
