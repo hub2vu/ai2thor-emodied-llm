@@ -14,7 +14,7 @@ llm_config:
       - Rotate Right.
       - Move Ahead 5 times.
       - Put the Tomato in the Pot.
-      - Call the Done Action.
+      - Don't forget to call the Done action at the end.
 
   backend: 'ollama'  # Options: together, huggingface, huggingface_remote, openai, ollama
   model: 'gemma3:12b'  # Vision-language model
@@ -25,7 +25,7 @@ llm_config:
     temperature: 0.0
     num_ctx: 100000  # Context window size
     top_p: 0.9
-    top_k: 40
+    top_k: 100
   system_task: |+
     - You are controlling a Robot inside a simulator environment.
     - You will be given a task to complete inside the simulator.
