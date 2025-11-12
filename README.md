@@ -66,6 +66,15 @@ The project supports multiple LLM backends that can be configured in the YAML co
 
 To switch backends, modify the `backend` field in your config file (e.g., `config/sample_task_1_ollama.yaml`).
 
+## Controls
+
+While the program is running, you can control execution using keyboard commands:
+
+- **`c`** - Continue to next step (manually trigger the next AI action)
+- **`Esc`** - Exit the program immediately
+
+The program also features **auto-continue** functionality: if no key is pressed, the program will automatically continue to the next step after 1 second. This allows the robot to operate continuously without manual intervention while still giving you the option to pause execution when needed.
+
 ## Demo
 
 This is a small demo video to demonstrate the project
