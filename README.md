@@ -117,9 +117,14 @@ While the program is running, you can control execution using keyboard commands:
 The program also features **auto-continue** functionality: if no key is pressed, the program will automatically continue to the next step after 1 second. This allows the robot to operate continuously without manual intervention while still giving you the option to pause execution when needed.
 
 ## Demo
+### Task 01 Demo
 
-This is a small demo video to demonstrate the project
+<a href="https://youtu.be/pYyQCkdDzUY" target="_blank">
+  <img src="imgs/Home-Task-01.png" alt="Task 01 Demo">
+</a>
 
-<a href="https://www.youtube.com/watch?v=AZHI45pB9r4" target="_blank">
-  <img src="https://img.youtube.com/vi/AZHI45pB9r4/maxresdefault.jpg" alt="Video Thumbnail" style="width:100%;max-width:640px;">
+### Task 02 Demo
+
+<a href="https://youtu.be/uI8k_Oczt0Y" target="_blank">
+  <img src="imgs/Home_Robot_Task_02.png" alt="Task 02 Demo">
 </a>
