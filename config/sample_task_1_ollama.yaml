@@ -3,18 +3,14 @@ simulator_config:
 llm_config:
   human_task: |+
     Your Task is:
-      - Rotate right.
-      - Move Ahead 20 times.
-      - Rotate Right.
-      - Open The Fridge.
-      - Pick the tomato.
-      - Close the Fridge.
-      - Rotate Right.
-      - Move Ahead 30 times.
-      - Rotate Right.
-      - Move Ahead 5 times.
-      - Put the Tomato in the Pot.
-      - Call the Done Action.
+    - Pick up the Potato.
+    - Put it in the Pot.
+    - Pick up the Pot.
+    - Go and stand in front of the StoveBurner, So that you are facing it directly.
+    - Toggle the StoveKnob that is located on your far right.
+    - Put the Pot on the StoveBurner.
+    - Toggle off the same StoveKnob.
+    - Call the Done action.
 
   backend: 'ollama'  # Options: together, huggingface, huggingface_remote, openai, ollama
   model: 'gemma3:12b'  # Vision-language model
