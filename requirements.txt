@@ -2,6 +2,7 @@ ai2thor
 langchain-openai
 langchain-together
 langchain-huggingface
+langchain-ollama
 transformers
 torch
 accelerate

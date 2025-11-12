@@ -5,6 +5,7 @@ import numpy as np
 from langchain_openai import ChatOpenAI
 from langchain_together import ChatTogether
 from langchain_huggingface import ChatHuggingFace, HuggingFacePipeline, HuggingFaceEndpoint
+from langchain_ollama import ChatOllama
 from langchain_core.messages import (
     AIMessage, SystemMessage,
     HumanMessage,
@@ -28,7 +29,7 @@ class LLMAgent:
             model (str): The model name/path to use
             system_task (str): The system prompt describing the agent's role
             human_task (str): The task description for the agent
-            backend (str): The backend to use ("together", "huggingface", "huggingface_remote", "openai")
+            backend (str): The backend to use ("together", "huggingface", "huggingface_remote", "openai", "ollama")
             device (Optional[str]): Device for local HuggingFace models (cuda/cpu)
             model_kwargs (Optional[dict]): Additional model configuration
         """
@@ -120,9 +121,25 @@ class LLMAgent:
                 temperature=0,
                 max_retries=2,
             )
+        elif backend == "ollama":
+            # Self-hosted Ollama backend
+            # Supports both text and vision-language models
+            self._llm = ChatOllama(
+                model=model,
+                base_url=model_kwargs.get("base_url", "http://localhost:11434"),
+                temperature=model_kwargs.get("temperature", 0),
+                num_predict=model_kwargs.get("num_predict", model_kwargs.get("max_new_tokens", 512)),
+                # Additional Ollama-specific parameters
+                num_ctx=model_kwargs.get("num_ctx"),  # Context window size
+                repeat_penalty=model_kwargs.get("repeat_penalty"),
+                top_k=model_kwargs.get("top_k"),
+                top_p=model_kwargs.get("top_p"),
+                reasoning=False,
+                verbose=True,
+            )
         else:
             raise ValueError(f"Unsupported backend: {backend}. "
-                           f"Choose from: together, huggingface, huggingface_vlm, huggingface_remote, openai")
+                           f"Choose from: together, huggingface, huggingface_vlm, huggingface_remote, openai, ollama")
 
     def _format_visible_objects(self, env_feedback: EnvironmentState) -> str:
         """Format visible objects list as a human-readable string.
@@ -140,6 +157,44 @@ class LLMAgent:
                                 for obj in env_feedback.visible_objects]
         visible_objects_text = "Visible objects:\n" + "\n".join(visible_objects_list)
         return visible_objects_text
+
+    def _print_thinking_tokens(self, ai_response_msg: AIMessage) -> None:
+        """Print thinking/reasoning tokens from the AI response if available.
+
+        Args:
+            ai_response_msg: The AI response message
+        """
+        # Check for reasoning_content in additional_kwargs (Ollama reasoning mode)
+        if hasattr(ai_response_msg, 'additional_kwargs'):
+            additional = ai_response_msg.additional_kwargs
+            if 'reasoning_content' in additional:
+                print("\n" + "="*50)
+                print("MODEL REASONING:")
+                print("="*50)
+                print(additional['reasoning_content'])
+                print("="*50 + "\n")
+                return
+
+        # Check for thinking tokens in response_metadata
+        if hasattr(ai_response_msg, 'response_metadata'):
+            metadata = ai_response_msg.response_metadata
+
+            # Different models store thinking differently
+            # For some models, it's in 'thinking' field
+            if 'thinking' in metadata:
+                print("\n" + "="*50)
+                print("MODEL THINKING:")
+                print("="*50)
+                print(metadata['thinking'])
+                print("="*50 + "\n")
+
+            # For some models, it's in 'reasoning' field
+            elif 'reasoning' in metadata:
+                print("\n" + "="*50)
+                print("MODEL REASONING:")
+                print("="*50)
+                print(metadata['reasoning'])
+                print("="*50 + "\n")
 
     def send_environment_feedback(
             self, env_feedback: Union[EnvironmentState, QueryReturn],
@@ -173,8 +228,13 @@ class LLMAgent:
             ])
             ai_response_msg = self._llm.invoke(self._message_history)
             self._message_history.append(ai_response_msg)
+
+            # Print thinking tokens if available
+            self._print_thinking_tokens(ai_response_msg)
+
             return ai_response_msg
         else:
+            # self._message_history.pop(-3) # Remove the last 3 messages
             encoded_img = env_feedback.agent_camera_view
             env_feedback.agent_camera_view = ''
 
@@ -215,4 +275,8 @@ class LLMAgent:
                 ])
             ai_response_msg = self._llm.invoke(self._message_history)
             self._message_history.append(ai_response_msg)
+
+            # Print thinking tokens if available
+            self._print_thinking_tokens(ai_response_msg)
+
             return ai_response_msg
