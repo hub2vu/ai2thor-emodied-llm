@@ -2,10 +2,10 @@
 
 ## Description
 
-- This is a simple project that uses Chatgpt-4o to control a home robot.
-- The robot is tasked to do a simple cooking task to do it in a simulated home environment.
+- This is a simple project that uses LLMs to control a home robot in a simulated environment.
+- The robot is tasked to do simple cooking tasks in a simulated home environment.
 - The project uses AI2Thor simulator and an iThor environment.
-- The project uses langchains to ineract with openai gpt-4o model.
+- The project supports multiple LLM backends including self-hosted Ollama, OpenAI, Together AI, and Hugging Face models.
 
 ## Installation
 
@@ -20,6 +20,19 @@ pip install -r requirements.txt
 
 ## Running
 
+### Using Self-Hosted Ollama (Default)
+
+The project is configured by default to use a self-hosted Ollama instance with the Gemma3:12b model:
+
+```bash
+# Source the virtual env
+source .venv/bin/activate
+# Run with Ollama backend (no API key needed)
+python main.py --config-file config/sample_task_1_ollama.yaml
+```
+
+### Using OpenAI
+
 ```bash
 # Source the virtual env
 source .venv/bin/activate
@@ -28,6 +41,30 @@ export OPENAI_API_KEY=YOUR_OPEN_AI_PROJECT_TOKEN
 # Run the code
 python main.py --config-file config/sample_task_1.yaml
 ```
+
+## Supported LLM Backends
+
+The project supports multiple LLM backends that can be configured in the YAML config file:
+
+- **ollama**: Self-hosted Ollama instance (recommended for local deployment)
+  - Requires Ollama running on your machine or network
+  - Configure `base_url` in `model_kwargs` to point to your Ollama server
+  - Example: `base_url: 'http://192.168.1.77:11434'`
+
+- **openai**: OpenAI API (GPT-4o, GPT-4, etc.)
+  - Requires `OPENAI_API_KEY` environment variable
+
+- **together**: Together AI API
+  - Requires Together AI API key
+
+- **huggingface**: Local Hugging Face models
+  - Runs models locally on your machine
+  - Requires GPU for optimal performance
+
+- **huggingface_remote**: Hugging Face Inference API
+  - Uses Hugging Face's hosted inference endpoints
+
+To switch backends, modify the `backend` field in your config file (e.g., `config/sample_task_1_ollama.yaml`).
 
 ## Demo
 
