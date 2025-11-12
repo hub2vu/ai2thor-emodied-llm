@@ -66,6 +66,47 @@ The project supports multiple LLM backends that can be configured in the YAML co
 
 To switch backends, modify the `backend` field in your config file (e.g., `config/sample_task_1_ollama.yaml`).
 
+## Architecture
+
+### How the Simulator and LLM Interact
+
+The project implements a perception-action loop where the LLM acts as the "brain" of the robot, making decisions based on visual input and environment state:
+
+#### Main Components
+
+1. **SimulatorBackend** (`src/simulator.py`)
+   - Wraps the AI2Thor simulator
+   - Provides robot control methods (move, rotate, pick, put, toggle, etc.)
+   - Captures camera images and environment state after each action
+   - Returns structured feedback including agent position, rotation, visible objects, and success status
+
+2. **LLMAgent** (`src/llm_agent.py`)
+   - Manages conversation with the LLM
+   - Sends multimodal messages combining:
+     - Environment state (position, rotation, success/failure)
+     - List of visible objects with their IDs
+     - Screenshot from the robot's camera
+   - Maintains conversation history for context
+   - Supports multiple backends (Ollama, OpenAI, Together AI, Hugging Face)
+
+3. **CodeExecutor** (`src/code_executor.py`)
+   - Parses Python code from LLM responses
+   - Executes code in a controlled environment
+   - Returns execution results and updated environment state
+
+#### Execution Loop
+
+The main execution loop (`main.py`) follows this cycle:
+
+1. **Initialize**: Simulator starts and captures initial environment state
+2. **Send to LLM**: Environment feedback (state + visible objects + screenshot) is sent to the LLM
+3. **LLM Reasoning**: The LLM analyzes the visual input and environment state, then generates Python code
+4. **Code Execution**: The generated code is parsed and executed against the simulator
+5. **Feedback**: The simulator returns the new environment state
+6. **Repeat**: Loop continues until `simulator.done()` is called or user exits
+
+This creates a closed-loop system where the LLM continuously perceives the environment through vision and makes decisions by generating executable code.
+
 ## Controls
 
 While the program is running, you can control execution using keyboard commands:
