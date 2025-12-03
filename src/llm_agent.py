@@ -3,7 +3,7 @@ import re
 
 import numpy as np
 from langchain_openai import ChatOpenAI
-from langchain_together import ChatTogether
+#from langchain_together import ChatTogether
 from langchain_huggingface import ChatHuggingFace, HuggingFacePipeline, HuggingFaceEndpoint
 from langchain_ollama import ChatOllama
 from langchain_core.messages import (
@@ -42,14 +42,14 @@ class LLMAgent:
             model_kwargs = {}
 
         # Initialize LLM based on backend
-        if backend == "together":
-            self._llm = ChatTogether(
-                model=model,
-                temperature=0,
-                max_tokens=None,
-                timeout=None,
-                max_retries=2,
-            )
+        # if backend == "together":
+        #     self._llm = ChatTogether(
+        #         model=model,
+        #         temperature=0,
+        #         max_tokens=None,
+        #         timeout=None,
+        #         max_retries=2,
+        #     )
         elif backend == "huggingface":
             # Local HuggingFace model execution (text-only models)
             # Determine device

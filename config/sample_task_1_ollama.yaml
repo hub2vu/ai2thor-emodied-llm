@@ -16,7 +16,7 @@ llm_config:
   model: 'gemma3:12b'  # Vision-language model
   # device: not needed for remote backends (together, huggingface_remote, openai, ollama)
   model_kwargs:
-    base_url: 'http://192.168.1.77:11434'
+    base_url: "http://127.0.0.1:11434"
     max_new_tokens: 20000
     temperature: 0.0
     num_ctx: 100000  # Context window size
