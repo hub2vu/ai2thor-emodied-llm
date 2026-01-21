@@ -5,6 +5,7 @@ from typing import Dict, List, Callable, Any, Tuple
 from dataclasses import field
 from io import BytesIO
 import base64
+import math
 
 import numpy as np
 from PIL import Image
@@ -171,6 +172,10 @@ class QueryObject(BaseModel):
 
 
 class SimulatorBackend:
+    # Objects that require direct facing for interaction (door opens towards agent)
+    ALIGNMENT_REQUIRED_OBJECTS = {"Fridge", "Cabinet", "Microwave"}
+    ALIGNMENT_THRESHOLD_DEGREES = 30.0
+
     def __init__(self, scene: str):
         """Represents the simulator backend so that
         the agent can interact with.
@@ -179,6 +184,7 @@ class SimulatorBackend:
             scene (str): The scene name to use.
         """
         self._rotation_degrees = 90
+        self._last_event = None  # Track last event for alignment checks
         self._controller = Controller(
             scene=scene,
             width=800,
@@ -342,6 +348,69 @@ class SimulatorBackend:
         data_url = f"data:image/jpeg;base64,{img_base64}"
         return data_url
 
+    def _is_facing_object_directly(self, object_id: str,
+                                     threshold_degrees: float = 30.0) -> Tuple[bool, str]:
+        """Check if the agent is facing the object directly (within threshold angle).
+
+        This is important for objects like Fridge where the door opens towards
+        the agent - opening from a diagonal angle causes occlusion issues.
+
+        Args:
+            object_id: The object ID to check alignment with
+            threshold_degrees: Maximum allowed angle deviation from direct facing
+
+        Returns:
+            Tuple of (is_aligned, error_message)
+        """
+        if not self._last_event:
+            return True, ""  # No event info available, skip check
+
+        # 1. Find target object position
+        target_obj = None
+        for obj in self._last_event.metadata['objects']:
+            if obj['objectId'] == object_id:
+                target_obj = obj
+                break
+
+        if not target_obj:
+            return False, "Object not found in scene metadata."
+
+        # 2. Get agent position and rotation
+        agent_pos = self._last_event.metadata['agent']['position']
+        agent_rot_y = self._last_event.metadata['agent']['rotation']['y']
+
+        # 3. Calculate vector from agent to object
+        dx = target_obj['position']['x'] - agent_pos['x']
+        dz = target_obj['position']['z'] - agent_pos['z']
+
+        # 4. Calculate agent's look direction vector
+        # AI2-THOR: 0°=North(+z), 90°=East(+x), 180°=South(-z), 270°=West(-x)
+        rad = math.radians(agent_rot_y)
+        look_dx = math.sin(rad)
+        look_dz = math.cos(rad)
+
+        # 5. Calculate angle between the two vectors using dot product
+        dot_product = (dx * look_dx) + (dz * look_dz)
+        mag_dist = math.sqrt(dx * dx + dz * dz)
+        mag_look = 1.0  # Unit vector
+
+        if mag_dist == 0:
+            return True, ""  # Object at same position as agent
+
+        cos_angle = dot_product / (mag_dist * mag_look)
+        # Clamp to handle floating point errors
+        cos_angle = max(min(cos_angle, 1.0), -1.0)
+
+        angle_degrees = math.degrees(math.acos(cos_angle))
+
+        if angle_degrees > threshold_degrees:
+            return False, (
+                f"You are viewing the object from a diagonal angle ({angle_degrees:.1f}°). "
+                f"Please move to face it directly (within {threshold_degrees}°)."
+            )
+
+        return True, ""
+
     def _force_render_update(self) -> None:
         """Force Unity to flush the render buffer by executing a Pass action.
 
@@ -352,6 +421,7 @@ class SimulatorBackend:
 
     def initailize_simulator(self) -> EnvironmentState:
         event = self._controller.step(action="Initialize")
+        self._last_event = event  # Store for alignment checks
         self._force_render_update()  # Force immediate display update
         return self.extract_environment_state_from_event(event)
 
@@ -362,6 +432,7 @@ class SimulatorBackend:
             EnvironmentState: The environment state after executing the action.
         """
         event = self._controller.step(action="MoveBack")
+        self._last_event = event
         self._force_render_update()  # Force immediate display update
         return self.extract_environment_state_from_event(event)
 
@@ -372,6 +443,7 @@ class SimulatorBackend:
             EnvironmentState: The environment state after executing the action.
         """
         event = self._controller.step(action="MoveAhead")
+        self._last_event = event
         self._force_render_update()  # Force immediate display update
         return self.extract_environment_state_from_event(event)
 
@@ -382,6 +454,7 @@ class SimulatorBackend:
             EnvironmentState: The environment state after executing the action.
         """
         event = self._controller.step(action="MoveLeft")
+        self._last_event = event
         self._force_render_update()  # Force immediate display update
         return self.extract_environment_state_from_event(event)
 
@@ -392,11 +465,12 @@ class SimulatorBackend:
             EnvironmentState: The environment state after executing the action.
         """
         event = self._controller.step(action="MoveRight")
+        self._last_event = event
         self._force_render_update()  # Force immediate display update
         return self.extract_environment_state_from_event(event)
 
     def rotate_left(self) -> EnvironmentState:
-        """Rotates the agent left by 20 degrees
+        """Rotates the agent left by 90 degrees
 
         Returns:
             EnvironmentState: The environment state after executing the action.
@@ -404,11 +478,12 @@ class SimulatorBackend:
         event = self._controller.step(
             action="RotateLeft",
             degrees=self._rotation_degrees)
+        self._last_event = event
         self._force_render_update()  # Force immediate display update
         return self.extract_environment_state_from_event(event)
 
     def rotate_right(self) -> EnvironmentState:
-        """Rotates the agent right by 20 degrees
+        """Rotates the agent right by 90 degrees
 
         Returns:
             EnvironmentState: The environment state after executing the action.
@@ -416,6 +491,7 @@ class SimulatorBackend:
         event = self._controller.step(
             action="RotateRight",
             degrees=self._rotation_degrees)
+        self._last_event = event
         self._force_render_update()  # Force immediate display update
         return self.extract_environment_state_from_event(event)
 
@@ -427,6 +503,7 @@ class SimulatorBackend:
         """
         global should_exit
         event = self._controller.step(action="Done")
+        self._last_event = event
         self._force_render_update()  # Force immediate display update
         print("Done Action has been called .. mission finished .. exiting!!.")
         self._controller.stop()
@@ -449,6 +526,7 @@ class SimulatorBackend:
             objectId=object_id,
             forceAction=False,
             manualInteract=False)
+        self._last_event = event
         self._force_render_update()  # Force immediate display update
         return self.extract_environment_state_from_event(event)
 
@@ -467,29 +545,47 @@ class SimulatorBackend:
             objectId=target_id,
             forceAction=False,
             placeStationary=True)
+        self._last_event = event
         self._force_render_update()  # Force immediate display update
         return self.extract_environment_state_from_event(event)
 
     def open_object(self, object_id: str) -> EnvironmentState:
-        """Opens an object like a frdige or microwave.
+        """Opens an object like a fridge or microwave.
+
+        For objects with doors that open towards the agent (Fridge, Cabinet, Microwave),
+        the agent must be facing the object directly to avoid occlusion issues.
 
         Args:
-            object_id (str): The closed The object id
-                for the object that needs to be opened.
+            object_id (str): The object id for the object that needs to be opened.
 
         Returns:
             EnvironmentState: The environment state after executing the action.
         """
+        # Check if this object requires alignment check
+        object_type = object_id.split("|")[0] if "|" in object_id else object_id
+        if object_type in self.ALIGNMENT_REQUIRED_OBJECTS:
+            is_aligned, error_msg = self._is_facing_object_directly(
+                object_id, self.ALIGNMENT_THRESHOLD_DEGREES
+            )
+            if not is_aligned:
+                # Not aligned: return error without executing action
+                current_state = self.extract_environment_state_from_event(self._last_event)
+                current_state.last_action_success = False
+                current_state.error_message = f"Alignment Error: {error_msg}"
+                return current_state
+
+        # Execute the open action
         event = self._controller.step(
             action="OpenObject",
             objectId=object_id,
             openness=1,
             forceAction=False)
+        self._last_event = event
         self._force_render_update()  # Force immediate display update
         return self.extract_environment_state_from_event(event)
 
     def close_object(self, object_id: str) -> EnvironmentState:
-        """Closes an object like a frdige or microwave.
+        """Closes an object like a fridge or microwave.
 
         Args:
             object_id (str): The object id for the object
@@ -502,6 +598,7 @@ class SimulatorBackend:
             action="CloseObject",
             objectId=object_id,
             forceAction=False)
+        self._last_event = event
         self._force_render_update()  # Force immediate display update
         return self.extract_environment_state_from_event(event)
 
@@ -518,6 +615,7 @@ class SimulatorBackend:
             action="ToggleObjectOn",
             objectId=object_id,
             forceAction=False)
+        self._last_event = event
         self._force_render_update()  # Force immediate display update
         return self.extract_environment_state_from_event(event)
 
@@ -534,6 +632,7 @@ class SimulatorBackend:
             action="ToggleObjectOff",
             objectId=object_id,
             forceAction=False)
+        self._last_event = event
         self._force_render_update()  # Force immediate display update
         return self.extract_environment_state_from_event(event)
 
@@ -551,6 +650,7 @@ class SimulatorBackend:
             action="SliceObject",
             objectId=object_id,
             forceAction=False)
+        self._last_event = event
         self._force_render_update()  # Force immediate display update
         return self.extract_environment_state_from_event(event)
 
