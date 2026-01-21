@@ -26,6 +26,17 @@ class SimulatorObject:
         "with this object"})
     object_type: str = field(metadata={
         "description": "The class type of the object"})
+    # Enhanced fields for RAG memory
+    parent_receptacles: List[str] = field(default_factory=list, metadata={
+        "description": "List of receptacle object IDs that contain this object"})
+    is_open: bool = field(default=False, metadata={
+        "description": "Whether the object is open (for openable objects)"})
+    is_toggled: bool = field(default=False, metadata={
+        "description": "Whether the object is toggled on (for toggleable objects)"})
+    is_pickupable: bool = field(default=False, metadata={
+        "description": "Whether the object can be picked up"})
+    is_receptacle: bool = field(default=False, metadata={
+        "description": "Whether the object can contain other objects"})
 
 
 @dataclass
@@ -286,12 +297,30 @@ class SimulatorBackend:
 
     @staticmethod
     def get_visible_objects_from_event(event: Event) -> List[SimulatorObject]:
+        """Extract visible objects with enhanced metadata from AI2-THOR event.
+
+        Args:
+            event (Event): The AI2-THOR event containing object metadata.
+
+        Returns:
+            List[SimulatorObject]: List of visible objects with full state info.
+        """
         visible_objects = []
         for object_dict in event.metadata['objects']:
             if object_dict['visible']:
+                # Extract parent receptacles (objects that contain this object)
+                parent_receptacles = object_dict.get('parentReceptacles') or []
+
                 obj = SimulatorObject(
-                    object_dict['position'], object_dict['objectId'],
-                    object_dict['objectType'])
+                    position=object_dict['position'],
+                    object_id=object_dict['objectId'],
+                    object_type=object_dict['objectType'],
+                    parent_receptacles=parent_receptacles,
+                    is_open=object_dict.get('isOpen', False),
+                    is_toggled=object_dict.get('isToggled', False),
+                    is_pickupable=object_dict.get('pickupable', False),
+                    is_receptacle=object_dict.get('receptacle', False)
+                )
                 visible_objects.append(obj)
         return visible_objects
 
