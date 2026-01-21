@@ -511,8 +511,9 @@ class MemoryWriter:
                 "is_toggled": obj.is_toggled,
                 "is_pickupable": obj.is_pickupable,
                 "is_receptacle": obj.is_receptacle,
-                "parent_receptacles": obj.parent_receptacles,
-                "changes": changes
+                # ChromaDB only supports str/int/float/bool - convert lists to comma-separated strings
+                "parent_receptacles": ",".join(obj.parent_receptacles) if obj.parent_receptacles else "",
+                "changes": ",".join(changes) if changes else ""
             }
         )
 
