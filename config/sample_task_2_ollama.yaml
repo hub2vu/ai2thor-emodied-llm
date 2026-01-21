@@ -66,6 +66,18 @@ llm_config:
     - Do NOT make up object_ids. Only use object_ids from the visible_objects list.
     - Wait until you are correctly positioned and can see the object before interacting.
 
+    VISUAL PERCEPTION - Relative Position Estimation:
+    - Look at the screenshot to estimate where objects are relative to you.
+    - Coordinate System (Agent-Centric):
+      * X_local: Positive (+) is to your RIGHT, Negative (-) is to your LEFT
+      * Z_local: Positive (+) is FORWARD/FRONT (distance ahead of you)
+    - Objects at the CENTER of the image are directly in front of you (X_local near 0).
+    - Objects on the LEFT side of the image have negative X_local.
+    - Objects on the RIGHT side of the image have positive X_local.
+    - Objects LOWER in the image are CLOSER (smaller Z_local).
+    - Objects HIGHER in the image (near horizon) are FARTHER (larger Z_local).
+    - To face an object directly: if it's on your left, use move_left(); if on your right, use move_right().
+
     Example response format:
     I need to move forward to get closer to the potato I can see in the image.
 

@@ -176,6 +176,12 @@ class SimulatorBackend:
     ALIGNMENT_REQUIRED_OBJECTS = {"Fridge", "Cabinet", "Microwave"}
     ALIGNMENT_THRESHOLD_DEGREES = 30.0
 
+    # Camera intrinsic parameters
+    IMAGE_WIDTH = 800
+    IMAGE_HEIGHT = 600
+    FIELD_OF_VIEW = 90  # AI2-THOR default FOV in degrees
+    CAMERA_HEIGHT = 1.57  # AI2-THOR default agent camera height in meters
+
     def __init__(self, scene: str):
         """Represents the simulator backend so that
         the agent can interact with.
@@ -185,15 +191,34 @@ class SimulatorBackend:
         """
         self._rotation_degrees = 90
         self._last_event = None  # Track last event for alignment checks
+
+        # Calculate focal length from FOV: f = (width / 2) / tan(fov / 2)
+        self._focal_length = (self.IMAGE_WIDTH / 2) / math.tan(math.radians(self.FIELD_OF_VIEW / 2))
+
         self._controller = Controller(
             scene=scene,
-            width=800,
-            height=600,
+            width=self.IMAGE_WIDTH,
+            height=self.IMAGE_HEIGHT,
             rotateStepDegrees=self._rotation_degrees,
             snapToGrid=True,
             renderImage=True,           # Explicitly enable image rendering
             visibilityDistance=1.5      # Match interaction distance
         )
+
+    @property
+    def camera_params(self) -> Dict[str, float]:
+        """Get camera intrinsic parameters for vision-based coordinate estimation.
+
+        Returns:
+            Dict containing width, height, fov, focal_length, camera_height
+        """
+        return {
+            "width": self.IMAGE_WIDTH,
+            "height": self.IMAGE_HEIGHT,
+            "fov": self.FIELD_OF_VIEW,
+            "focal_length": self._focal_length,
+            "camera_height": self.CAMERA_HEIGHT
+        }
 
     def get_available_actions(self) -> List[Callable]:
         """Returns the available actions within the simulator

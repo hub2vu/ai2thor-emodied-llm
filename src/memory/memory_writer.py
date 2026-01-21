@@ -655,6 +655,78 @@ class MemoryWriter:
 
         return self._store.add(doc)
 
+    def record_vision_based_object(self, object_type: str,
+                                     x_local: float, z_local: float,
+                                     confidence: float = 1.0,
+                                     is_fixed: bool = False) -> str:
+        """Record an object position estimated from vision (no metadata).
+
+        This method stores object positions derived purely from visual
+        observation using the VisionCoordinateEstimator.
+
+        Args:
+            object_type: The type of object (e.g., "Fridge", "Sink")
+            x_local: Relative X coordinate (right=+, left=-)
+            z_local: Relative Z coordinate (depth/distance, front=+)
+            confidence: Confidence score of the detection (0-1)
+            is_fixed: Whether this is a fixed/immovable object
+
+        Returns:
+            The document ID
+        """
+        direction = "right" if x_local >= 0 else "left"
+        content = (
+            f"Object '{object_type}' is approximately {abs(x_local):.1f}m "
+            f"to your {direction} and {z_local:.1f}m ahead."
+        )
+
+        doc = MemoryDocument(
+            content=content,
+            memory_type=MemoryType.OBJECT,
+            step=self._current_step,
+            metadata={
+                "object_type": object_type,
+                "x_local": x_local,
+                "z_local": z_local,
+                "coordinate_source": "vision",  # Mark as vision-derived
+                "confidence": confidence,
+                "is_fixed": is_fixed,
+                "is_pickupable": not is_fixed  # Fixed objects are not pickupable
+            }
+        )
+
+        return self._store.add(doc)
+
+    def record_vision_observation(self, detected_objects: List[Dict[str, Any]],
+                                   frame_id: Optional[str] = None) -> List[str]:
+        """Record multiple objects detected via vision in a single observation.
+
+        Args:
+            detected_objects: List of dicts with keys:
+                - object_type: str
+                - x_local: float
+                - z_local: float
+                - confidence: float (optional)
+                - is_fixed: bool (optional)
+            frame_id: Optional frame ID to link to image
+
+        Returns:
+            List of document IDs
+        """
+        doc_ids = []
+
+        for obj in detected_objects:
+            doc_id = self.record_vision_based_object(
+                object_type=obj["object_type"],
+                x_local=obj["x_local"],
+                z_local=obj["z_local"],
+                confidence=obj.get("confidence", 1.0),
+                is_fixed=obj.get("is_fixed", False)
+            )
+            doc_ids.append(doc_id)
+
+        return doc_ids
+
     def get_visited_positions(self) -> Set[tuple]:
         """Get the set of visited grid positions."""
         return self._visited_positions.copy()
