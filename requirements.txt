@@ -9,3 +9,5 @@ accelerate
 pynput
 Pillow
 numpy
+chromadb
+pydantic

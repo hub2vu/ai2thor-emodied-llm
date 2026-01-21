@@ -1,4 +1,7 @@
 """Represents the main entry point of the project.
+
+This project implements a Stateless RAG-based Context Injection pattern
+for embodied AI agents in the AI2Thor simulator.
 """
 
 from typing import Union
@@ -66,6 +69,10 @@ def process_ai_step():
     """
     global env_feedback, execution_result
     global agent, simulator, code_executor, ai_message
+
+    # Print memory stats (for stateless RAG mode)
+    memory_stats = agent.get_memory_stats()
+    print(f"\n[Memory Stats: {memory_stats}]")
 
     # Send environment feedback to LLM
     ai_message = agent.send_environment_feedback(

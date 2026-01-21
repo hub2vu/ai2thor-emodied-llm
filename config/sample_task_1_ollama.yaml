@@ -14,6 +14,7 @@ llm_config:
 
   backend: 'ollama'  # Options: together, huggingface, huggingface_remote, openai, ollama
   model: 'gemma3:12b'  # Vision-language model
+  use_stateless_rag: true  # Enable Stateless RAG Context Injection pattern (default: true)
   # device: not needed for remote backends (together, huggingface_remote, openai, ollama)
   model_kwargs:
     base_url: "http://127.0.0.1:11434"
