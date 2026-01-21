@@ -82,7 +82,17 @@ class LLMAgent:
             )
             self._bbox_parser = VLMBoundingBoxParser()
             self._detected_objects: List[RelativeCoordinate] = []
-            print("\n[No-Metadata Mode] Using VLM vision only - no simulator metadata")
+
+            # Dead Reckoning: Initialize internal position/rotation tracking
+            # Start at origin (0, 0) facing North (0 degrees)
+            self._dead_reckoning_position = {"x": 0.0, "y": 0.0, "z": 0.0}
+            self._dead_reckoning_rotation = {"x": 0.0, "y": 0.0, "z": 0.0}
+
+            # AI2-THOR default movement parameters
+            self._move_distance = 0.25  # meters per move action
+            self._rotation_degrees = 90.0  # degrees per rotation action
+
+            print("\n[No-Metadata Mode] Using VLM vision only + Dead Reckoning")
 
         # Initialize memory components for stateless RAG pattern
         if use_stateless_rag:
@@ -384,6 +394,82 @@ Now detect objects in the image:"""
 
         return "\n".join(lines)
 
+    def _update_dead_reckoning(self, execution_result: Optional[str],
+                                action_success: bool) -> None:
+        """Update dead reckoning position based on executed action.
+
+        Dead Reckoning: Track position internally by accumulating movements.
+        Initial position is (0, 0) facing 0 degrees (North/+Z direction).
+
+        Coordinate System:
+        - X: Right (+) / Left (-)
+        - Z: Forward (+) / Back (-)
+        - Y rotation: 0=North(+Z), 90=East(+X), 180=South(-Z), 270=West(-X)
+
+        Args:
+            execution_result: The execution result string containing action info
+            action_success: Whether the action succeeded
+        """
+        if not execution_result or not action_success:
+            return
+
+        import math
+
+        # Current facing direction in radians
+        facing_rad = math.radians(self._dead_reckoning_rotation["y"])
+
+        # Parse action from execution result
+        result_lower = execution_result.lower()
+
+        # Movement actions
+        if "move_ahead" in result_lower:
+            # Move forward in facing direction
+            self._dead_reckoning_position["x"] += self._move_distance * math.sin(facing_rad)
+            self._dead_reckoning_position["z"] += self._move_distance * math.cos(facing_rad)
+
+        elif "move_back" in result_lower:
+            # Move backward (opposite of facing direction)
+            self._dead_reckoning_position["x"] -= self._move_distance * math.sin(facing_rad)
+            self._dead_reckoning_position["z"] -= self._move_distance * math.cos(facing_rad)
+
+        elif "move_left" in result_lower:
+            # Strafe left (perpendicular to facing)
+            self._dead_reckoning_position["x"] -= self._move_distance * math.cos(facing_rad)
+            self._dead_reckoning_position["z"] += self._move_distance * math.sin(facing_rad)
+
+        elif "move_right" in result_lower:
+            # Strafe right (perpendicular to facing)
+            self._dead_reckoning_position["x"] += self._move_distance * math.cos(facing_rad)
+            self._dead_reckoning_position["z"] -= self._move_distance * math.sin(facing_rad)
+
+        # Rotation actions
+        elif "rotate_left" in result_lower:
+            # Rotate counter-clockwise (decrease Y rotation)
+            self._dead_reckoning_rotation["y"] -= self._rotation_degrees
+            # Normalize to 0-360
+            self._dead_reckoning_rotation["y"] %= 360
+
+        elif "rotate_right" in result_lower:
+            # Rotate clockwise (increase Y rotation)
+            self._dead_reckoning_rotation["y"] += self._rotation_degrees
+            # Normalize to 0-360
+            self._dead_reckoning_rotation["y"] %= 360
+
+        # Round to avoid floating point drift
+        self._dead_reckoning_position["x"] = round(self._dead_reckoning_position["x"], 2)
+        self._dead_reckoning_position["z"] = round(self._dead_reckoning_position["z"], 2)
+
+    def _get_dead_reckoning_state(self) -> tuple:
+        """Get current dead reckoning position and rotation.
+
+        Returns:
+            Tuple of (position_dict, rotation_dict)
+        """
+        return (
+            self._dead_reckoning_position.copy(),
+            self._dead_reckoning_rotation.copy()
+        )
+
     def send_environment_feedback(
             self, env_feedback: Union[EnvironmentState, QueryReturn],
             execution_result: Optional[str] = None) -> AIMessage:
@@ -424,7 +510,17 @@ Now detect objects in the image:"""
         self._current_step += 1
 
         # ============================================================
-        # [NO-METADATA MODE] - Detect objects via VLM before processing
+        # [NO-METADATA MODE] - Update Dead Reckoning first
+        # ============================================================
+        if self._no_metadata_mode and not is_first_turn:
+            # Update position/rotation based on the action that was just executed
+            self._update_dead_reckoning(
+                execution_result=execution_result,
+                action_success=env_feedback.last_action_success if isinstance(env_feedback, EnvironmentState) else True
+            )
+
+        # ============================================================
+        # [NO-METADATA MODE] - Detect objects via VLM
         # ============================================================
         detected_coordinates = []
         if self._no_metadata_mode and isinstance(env_feedback, EnvironmentState):
@@ -436,14 +532,20 @@ Now detect objects in the image:"""
         # ============================================================
         if isinstance(env_feedback, EnvironmentState):
             if self._no_metadata_mode:
-                # In no-metadata mode, we already stored objects via _detect_objects_via_vlm
-                # Just record the observation without using visible_objects metadata
+                # Use dead reckoning position/rotation (NO metadata!)
+                dr_position, dr_rotation = self._get_dead_reckoning_state()
+
+                # Record observation with dead-reckoned position
                 self._memory_writer.record_observation(
-                    agent_position=env_feedback.agent_position,
-                    agent_rotation=env_feedback.agent_rotation,
+                    agent_position=dr_position,
+                    agent_rotation=dr_rotation,
                     action_success=env_feedback.last_action_success,
                     error_message=env_feedback.error_message
                 )
+
+                # Debug: Print dead reckoning state
+                print(f"\n[Dead Reckoning] Position: ({dr_position['x']:.2f}, {dr_position['z']:.2f}), "
+                      f"Facing: {dr_rotation['y']:.0f}°")
             else:
                 # Standard mode: use metadata for object detection
                 action_taken = None
@@ -462,21 +564,35 @@ Now detect objects in the image:"""
         # ============================================================
         memory_text = ""
         if isinstance(env_feedback, EnvironmentState):
-            context = self._memory_retriever.retrieve_relevant_context(
-                task_description=self._human_task,
-                env_state=env_feedback,
-                current_step=self._current_step
-            )
+            if self._no_metadata_mode:
+                # Pass dead reckoning position for retrieval context
+                dr_position, dr_rotation = self._get_dead_reckoning_state()
+                context = self._memory_retriever.retrieve_relevant_context_no_metadata(
+                    task_description=self._human_task,
+                    agent_position=dr_position,
+                    current_step=self._current_step
+                )
+            else:
+                context = self._memory_retriever.retrieve_relevant_context(
+                    task_description=self._human_task,
+                    env_state=env_feedback,
+                    current_step=self._current_step
+                )
             memory_text = self._memory_retriever.format_as_text(context)
 
         # ============================================================
         # [Step 3: ASSEMBLE PHASE] - Build fresh prompt
         # ============================================================
         if self._no_metadata_mode:
-            # In no-metadata mode, pass detected objects to assembler
+            # Pass dead reckoning state to assembler (NO metadata!)
+            dr_position, dr_rotation = self._get_dead_reckoning_state()
             messages = self._context_assembler.assemble_messages_no_metadata(
-                env_state=env_feedback,
+                agent_position=dr_position,
+                agent_rotation=dr_rotation,
                 detected_objects=detected_coordinates,
+                action_success=env_feedback.last_action_success if isinstance(env_feedback, EnvironmentState) else True,
+                error_message=env_feedback.error_message if isinstance(env_feedback, EnvironmentState) else "",
+                encoded_image=env_feedback.agent_camera_view,
                 memory_text=memory_text,
                 execution_result=execution_result,
                 current_step=self._current_step,

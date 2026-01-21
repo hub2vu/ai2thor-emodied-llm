@@ -173,20 +173,29 @@ class ContextAssembler:
         return "\n".join(sections)
 
     def assemble_messages_no_metadata(self,
-                                       env_state: EnvironmentState,
+                                       agent_position: Dict[str, float],
+                                       agent_rotation: Dict[str, float],
                                        detected_objects: List["RelativeCoordinate"],
+                                       action_success: bool,
+                                       error_message: str,
+                                       encoded_image: str,
                                        memory_text: Optional[str] = None,
                                        execution_result: Optional[str] = None,
                                        current_step: int = 0,
                                        is_first_turn: bool = False) -> List[Union[SystemMessage, HumanMessage]]:
-        """Assemble messages for no-metadata mode using vision-detected objects.
+        """Assemble messages for no-metadata mode using dead reckoning and vision.
 
-        In no-metadata mode, we use VLM-detected objects with estimated positions
-        instead of simulator's visible_objects metadata.
+        In no-metadata mode:
+        - Position/rotation comes from Dead Reckoning (not simulator metadata)
+        - Objects come from VLM detection (not visible_objects metadata)
 
         Args:
-            env_state: Current environment state (only using position/rotation/success)
+            agent_position: Dead reckoning estimated position
+            agent_rotation: Dead reckoning estimated rotation
             detected_objects: List of RelativeCoordinate from vision detection
+            action_success: Whether last action succeeded
+            error_message: Error message if action failed
+            encoded_image: Base64-encoded screenshot
             memory_text: Formatted text from RAG memory retrieval
             execution_result: Result/error from last code execution
             current_step: Current step number
@@ -211,55 +220,65 @@ class ContextAssembler:
             messages.append(SystemMessage(content=memory_section))
 
         # ============================================================
-        # 3. CURRENT OBSERVATION (no metadata - vision only)
+        # 3. CURRENT OBSERVATION (dead reckoning + vision)
         # ============================================================
         current_obs = self._format_current_observation_no_metadata(
-            env_state=env_state,
+            agent_position=agent_position,
+            agent_rotation=agent_rotation,
             detected_objects=detected_objects,
+            action_success=action_success,
+            error_message=error_message,
             execution_result=execution_result,
             current_step=current_step,
             is_first_turn=is_first_turn
         )
 
         # Combine text observation with screenshot
-        encoded_img = env_state.agent_camera_view
         messages.append(HumanMessage(content=[
             {"type": "text", "text": current_obs},
-            {"type": "image_url", "image_url": {"url": encoded_img}}
+            {"type": "image_url", "image_url": {"url": encoded_image}}
         ]))
 
         return messages
 
     def _format_current_observation_no_metadata(self,
-                                                  env_state: EnvironmentState,
+                                                  agent_position: Dict[str, float],
+                                                  agent_rotation: Dict[str, float],
                                                   detected_objects: List["RelativeCoordinate"],
+                                                  action_success: bool,
+                                                  error_message: str,
                                                   execution_result: Optional[str],
                                                   current_step: int,
                                                   is_first_turn: bool) -> str:
         """Format current observation for no-metadata mode.
 
+        Uses Dead Reckoning position (not simulator metadata).
+
         Args:
-            env_state: Environment state (position/rotation/success only)
+            agent_position: Dead reckoning estimated position
+            agent_rotation: Dead reckoning estimated rotation
             detected_objects: Vision-detected objects with estimated positions
+            action_success: Whether last action succeeded
+            error_message: Error message if action failed
             execution_result: Last execution result
             current_step: Current step number
             is_first_turn: Whether this is the first turn
 
         Returns:
-            Formatted observation string (without visible_objects metadata)
+            Formatted observation string
         """
         sections = []
 
         # Header
-        sections.append(f"# Current Observation (Step {current_step}) [VISION-ONLY MODE]")
-        sections.append("(Object positions are estimated from visual observation.)\n")
+        sections.append(f"# Current Observation (Step {current_step}) [VISION + DEAD RECKONING]")
+        sections.append("(Position from movement tracking, objects from vision.)\n")
 
         # Last Action Result (except on first turn)
         if not is_first_turn:
-            if env_state.last_action_success:
+            if action_success:
                 action_status = "SUCCESS"
             else:
-                action_status = f"FAILED - {env_state.error_message}"
+                action_status = f"FAILED - {error_message}"
 
             sections.append(f"## Last Action Result: {action_status}")
 
@@ -268,11 +287,11 @@ class ContextAssembler:
 
             sections.append("")
 
-        # Agent State (minimal - no absolute position in pure vision mode)
-        rot = env_state.agent_rotation
-        facing = self._get_facing_direction(rot['y'])
-        sections.append(f"## Agent State:")
-        sections.append(f"- Facing: {facing} ({rot['y']:.0f}°)")
+        # Agent State (Dead Reckoning estimated position)
+        facing = self._get_facing_direction(agent_rotation['y'])
+        sections.append(f"## Agent State (Dead Reckoning):")
+        sections.append(f"- Estimated Position: ({agent_position['x']:.2f}, {agent_position['z']:.2f})")
+        sections.append(f"- Facing: {facing} ({agent_rotation['y']:.0f}°)")
         sections.append("")
 
         # Detected Objects (from vision)

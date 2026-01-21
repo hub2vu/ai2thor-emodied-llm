@@ -91,6 +91,134 @@ class MemoryRetriever:
 
         return context
 
+    def retrieve_relevant_context_no_metadata(self,
+                                               task_description: str,
+                                               agent_position: Dict[str, float],
+                                               current_step: int) -> Dict[str, Any]:
+        """Retrieve context for no-metadata mode (Dead Reckoning + Vision).
+
+        In no-metadata mode, we don't have access to env_state.visible_objects,
+        so we can't determine what's currently visible vs missing.
+        Instead, we retrieve all task-relevant memories.
+
+        Args:
+            task_description: The task goal description
+            agent_position: Dead reckoning estimated position
+            current_step: The current step number
+
+        Returns:
+            Dictionary containing categorized memories
+        """
+        # Extract task-relevant nouns (object types mentioned in task)
+        task_objects = self._extract_task_objects(task_description)
+
+        # In no-metadata mode, we don't know what's visible
+        # So we treat all task objects as potentially needing memory lookup
+        context = {
+            "object_memories": [],
+            "observation_memories": [],
+            "action_memories": [],
+            "relation_memories": [],
+            "missing_objects": []  # Can't determine without metadata
+        }
+
+        # 1. Retrieve object memories for all task objects
+        context["object_memories"] = self._retrieve_object_memories_no_metadata(
+            task_objects, current_step
+        )
+
+        # 2. Retrieve recent failed actions
+        context["action_memories"] = self._retrieve_failed_actions(current_step)
+
+        # 3. Retrieve relevant relations
+        context["relation_memories"] = self._retrieve_relations(
+            task_objects, current_step
+        )
+
+        # 4. Retrieve navigation observations near current position
+        context["observation_memories"] = self._retrieve_observations_near_position(
+            agent_position, current_step
+        )
+
+        return context
+
+    def _retrieve_object_memories_no_metadata(self,
+                                               task_objects: Set[str],
+                                               current_step: int) -> List[Dict[str, Any]]:
+        """Retrieve object memories without visibility information.
+
+        Args:
+            task_objects: Objects mentioned in task
+            current_step: Current step number for recency scoring
+
+        Returns:
+            List of object memory documents
+        """
+        memories = []
+
+        # Search for all task objects
+        for obj_type in task_objects:
+            query = f"Where is {obj_type}? {obj_type} location"
+            results = self._store.query(
+                query_text=query,
+                n_results=3,
+                memory_type=MemoryType.OBJECT
+            )
+            for result in results:
+                result["priority"] = "medium"
+                result["reason"] = f"Task object: {obj_type}"
+            memories.extend(results)
+
+        # Score by recency and deduplicate
+        memories = self._score_and_deduplicate(memories, current_step)
+
+        return memories[:self.MAX_OBJECT_MEMORIES]
+
+    def _retrieve_observations_near_position(self,
+                                              agent_position: Dict[str, float],
+                                              current_step: int) -> List[Dict[str, Any]]:
+        """Retrieve observations near the agent's current dead reckoning position.
+
+        Args:
+            agent_position: Dead reckoning estimated position
+            current_step: Current step number
+
+        Returns:
+            List of observation memories
+        """
+        # Get recent observations
+        results = self._store.query_by_type(
+            memory_type=MemoryType.OBSERVATION,
+            n_results=self.MAX_OBSERVATION_MEMORIES * 2,
+            sort_by_recency=True
+        )
+
+        # Filter by proximity to current position (if position metadata exists)
+        nearby = []
+        for obs in results:
+            meta = obs.get("metadata", {})
+            obs_x = meta.get("agent_x")
+            obs_z = meta.get("agent_z")
+
+            if obs_x is not None and obs_z is not None:
+                # Calculate distance from current position
+                dx = agent_position["x"] - obs_x
+                dz = agent_position["z"] - obs_z
+                distance = (dx * dx + dz * dz) ** 0.5
+
+                # Keep observations within 3 meters
+                if distance < 3.0:
+                    obs["distance_from_agent"] = distance
+                    nearby.append(obs)
+            else:
+                # No position data, include anyway
+                nearby.append(obs)
+
+        # Sort by distance (nearest first) then by recency
+        nearby.sort(key=lambda x: (x.get("distance_from_agent", 999), -x.get("metadata", {}).get("step", 0)))
+
+        return nearby[:self.MAX_OBSERVATION_MEMORIES]
+
     def _extract_task_objects(self, task_description: str) -> Set[str]:
         """Extract object type names from task description.
 
