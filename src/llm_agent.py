@@ -38,13 +38,15 @@ class LLMAgent:
     - No message history is maintained across turns
     - Each turn assembles a fresh prompt from static info + RAG memories + current obs
     - Memories are stored in a vector database and retrieved as needed
+    - Fixed objects (non-pickupable) are persisted across episodes
     """
 
     def __init__(self, model: str, system_task: str,
                  human_task: str, backend: str = "together",
                  device: Optional[str] = None,
                  model_kwargs: Optional[dict] = None,
-                 use_stateless_rag: bool = True):
+                 use_stateless_rag: bool = True,
+                 memory_db_path: Optional[str] = "./agent_memory_db"):
         """Initialize the LLM agent.
 
         Args:
@@ -55,6 +57,7 @@ class LLMAgent:
             device (Optional[str]): Device for local HuggingFace models (cuda/cpu)
             model_kwargs (Optional[dict]): Additional model configuration
             use_stateless_rag (bool): Whether to use stateless RAG pattern (default: True)
+            memory_db_path (Optional[str]): Path for persistent memory storage (default: ./agent_memory_db)
         """
         self._system_task = system_task
         self._human_task = human_task
@@ -64,10 +67,16 @@ class LLMAgent:
 
         # Initialize memory components for stateless RAG pattern
         if use_stateless_rag:
-            self._memory_store = MemoryStore(collection_name="agent_memory")
+            self._memory_store = MemoryStore(
+                collection_name="agent_memory",
+                persist_directory=memory_db_path  # Persist to disk
+            )
             self._memory_writer = MemoryWriter(self._memory_store)
             self._memory_retriever = MemoryRetriever(self._memory_store)
             self._context_assembler = ContextAssembler(system_task, human_task)
+
+            # Clean up transient memories, keep only fixed objects
+            self._retain_only_fixed_objects()
         else:
             # Fallback to legacy mode with message history
             self._message_history = []
@@ -480,10 +489,58 @@ class LLMAgent:
             self._print_thinking_tokens(ai_response_msg)
             return ai_response_msg
 
+    def _retain_only_fixed_objects(self) -> None:
+        """Clean up transient memories, keeping only fixed object locations.
+
+        This method is called at startup to:
+        - Delete action history (success/failure records)
+        - Delete observation history (navigation path)
+        - Delete relation records (may be stale)
+        - Delete pickupable object locations (positions may have changed)
+
+        Only non-pickupable objects (Fridge, Stove, Sink, etc.) are retained
+        as their positions don't change between episodes.
+        """
+        print("\n[Memory System] Cleaning up transient memories, keeping fixed objects...")
+
+        initial_count = self._memory_store.count()
+
+        # 1. Delete action history (success/failure records from previous episodes)
+        try:
+            self._memory_store.delete_by_filter({"memory_type": "action"})
+        except Exception:
+            pass  # Ignore if no matching documents
+
+        # 2. Delete observation history (agent's navigation path)
+        try:
+            self._memory_store.delete_by_filter({"memory_type": "observation"})
+        except Exception:
+            pass
+
+        # 3. Delete relation records (objects may have been moved)
+        try:
+            self._memory_store.delete_by_filter({"memory_type": "relation"})
+        except Exception:
+            pass
+
+        # 4. Delete pickupable object locations (Apple, Potato, etc. may have moved)
+        try:
+            self._memory_store.delete_by_filter({"is_pickupable": True})
+        except Exception:
+            pass
+
+        final_count = self._memory_store.count()
+        deleted_count = initial_count - final_count
+
+        print(f"[Memory System] Cleanup complete. Deleted {deleted_count} transient memories.")
+        print(f"[Memory System] Retained {final_count} fixed object locations.\n")
+
     def reset_memory(self) -> None:
         """Reset the memory store for a new episode.
 
         Only applicable when using stateless RAG mode.
+        This clears all memories including fixed objects.
+        Use _retain_only_fixed_objects() for selective cleanup.
         """
         if self._use_stateless_rag:
             self._memory_writer.reset()
