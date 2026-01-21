@@ -655,6 +655,99 @@ class MemoryWriter:
 
         return self._store.add(doc)
 
+    def record_observation(self, agent_position: Dict[str, float],
+                            agent_rotation: Dict[str, float],
+                            action_success: bool = True,
+                            error_message: str = "") -> Optional[str]:
+        """Record a basic observation without using visible_objects metadata.
+
+        This method is used in no-metadata mode where object detection
+        is handled separately via VLM.
+
+        Args:
+            agent_position: Agent's current position
+            agent_rotation: Agent's current rotation
+            action_success: Whether the last action succeeded
+            error_message: Error message if action failed
+
+        Returns:
+            Document ID if observation was recorded, None if skipped
+        """
+        self._current_step += 1
+
+        # Check for significant position change
+        if self._last_agent_position is not None:
+            dx = agent_position["x"] - self._last_agent_position["x"]
+            dz = agent_position["z"] - self._last_agent_position["z"]
+            distance = math.sqrt(dx * dx + dz * dz)
+
+            rotation_diff = 0
+            if self._last_agent_rotation:
+                rotation_diff = abs(agent_rotation["y"] - self._last_agent_rotation["y"])
+                rotation_diff = min(rotation_diff, 360 - rotation_diff)
+
+            # Skip if no significant movement
+            if distance < self.POSITION_CHANGE_THRESHOLD and rotation_diff < self.ROTATION_CHANGE_THRESHOLD:
+                # Still record failed actions
+                if not action_success:
+                    return self._record_failed_action(error_message)
+                return None
+
+        # Record significant position change
+        facing = self._get_facing_direction(agent_rotation["y"])
+        content = (
+            f"Agent at position ({agent_position['x']:.2f}, {agent_position['z']:.2f}) "
+            f"facing {facing}."
+        )
+
+        doc = MemoryDocument(
+            content=content,
+            memory_type=MemoryType.OBSERVATION,
+            step=self._current_step,
+            metadata={
+                "agent_x": agent_position["x"],
+                "agent_z": agent_position["z"],
+                "agent_rotation": agent_rotation["y"],
+                "facing": facing,
+                "coordinate_source": "vision_mode"  # Mark as vision mode observation
+            }
+        )
+
+        doc_id = self._store.add(doc)
+
+        # Update tracking
+        self._last_agent_position = agent_position.copy()
+        self._last_agent_rotation = agent_rotation.copy()
+
+        # Track visited positions
+        grid_pos = (round(agent_position["x"], 1), round(agent_position["z"], 1))
+        self._visited_positions.add(grid_pos)
+
+        return doc_id
+
+    def _record_failed_action(self, error_message: str) -> str:
+        """Record a failed action in no-metadata mode.
+
+        Args:
+            error_message: The error message
+
+        Returns:
+            The document ID
+        """
+        content = f"Last action FAILED: {error_message}"
+
+        doc = MemoryDocument(
+            content=content,
+            memory_type=MemoryType.ACTION,
+            step=self._current_step,
+            metadata={
+                "success": False,
+                "error": error_message
+            }
+        )
+
+        return self._store.add(doc)
+
     def record_vision_based_object(self, object_type: str,
                                      x_local: float, z_local: float,
                                      confidence: float = 1.0,

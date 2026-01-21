@@ -9,7 +9,7 @@ where each turn assembles a fresh prompt from:
 No conversation history is maintained - all context comes from RAG.
 """
 
-from typing import Union, Optional
+from typing import Union, Optional, List
 import re
 
 import numpy as np
@@ -29,6 +29,10 @@ from src.simulator import EnvironmentState, QueryReturn
 from src.memory import (
     MemoryStore, MemoryWriter, MemoryRetriever, ContextAssembler
 )
+from src.vision import (
+    VisionCoordinateEstimator, VLMBoundingBoxParser,
+    BoundingBox, RelativeCoordinate
+)
 
 
 class LLMAgent:
@@ -46,7 +50,8 @@ class LLMAgent:
                  device: Optional[str] = None,
                  model_kwargs: Optional[dict] = None,
                  use_stateless_rag: bool = True,
-                 memory_db_path: Optional[str] = "./agent_memory_db"):
+                 memory_db_path: Optional[str] = "./agent_memory_db",
+                 no_metadata_mode: bool = False):
         """Initialize the LLM agent.
 
         Args:
@@ -58,12 +63,26 @@ class LLMAgent:
             model_kwargs (Optional[dict]): Additional model configuration
             use_stateless_rag (bool): Whether to use stateless RAG pattern (default: True)
             memory_db_path (Optional[str]): Path for persistent memory storage (default: ./agent_memory_db)
+            no_metadata_mode (bool): If True, use only VLM vision for object detection (no simulator metadata)
         """
         self._system_task = system_task
         self._human_task = human_task
         self._first_message = True
         self._current_step = 0
         self._use_stateless_rag = use_stateless_rag
+        self._no_metadata_mode = no_metadata_mode
+
+        # Initialize vision coordinate estimator for no-metadata mode
+        if no_metadata_mode:
+            self._vision_estimator = VisionCoordinateEstimator(
+                image_width=800,
+                image_height=600,
+                fov_degrees=90.0,
+                camera_height=1.57
+            )
+            self._bbox_parser = VLMBoundingBoxParser()
+            self._detected_objects: List[RelativeCoordinate] = []
+            print("\n[No-Metadata Mode] Using VLM vision only - no simulator metadata")
 
         # Initialize memory components for stateless RAG pattern
         if use_stateless_rag:
@@ -244,6 +263,127 @@ class LLMAgent:
 
         return None
 
+    def _detect_objects_via_vlm(self, encoded_img: str) -> List[RelativeCoordinate]:
+        """Use VLM to detect objects and estimate their positions (no metadata mode).
+
+        This method sends the screenshot to the VLM with a special bounding box detection
+        prompt, then parses the response and converts to relative coordinates.
+
+        Args:
+            encoded_img: Base64-encoded image from simulator
+
+        Returns:
+            List of RelativeCoordinate objects for detected objects
+        """
+        # VLM detection prompt - asks for bounding boxes in normalized coordinates
+        detection_prompt = """Detect all objects in this image and provide bounding boxes.
+
+For EACH visible object, output in this exact format:
+ObjectType: [x_min, y_min, x_max, y_max]
+
+Where coordinates are normalized (0.0 to 1.0):
+- x_min: left edge (0=left, 1=right)
+- y_min: top edge (0=top, 1=bottom)
+- x_max: right edge
+- y_max: bottom edge
+
+Only list objects you can clearly see. Common kitchen objects:
+Fridge, Microwave, Sink, StoveBurner, CounterTop, Cabinet, Drawer,
+Apple, Potato, Tomato, Egg, Bread, Lettuce, Mug, Cup, Bowl, Plate,
+Knife, Fork, Spoon, Pan, Pot, SaltShaker, PepperShaker, Toaster
+
+Example output:
+Fridge: [0.05, 0.10, 0.35, 0.95]
+Apple: [0.60, 0.55, 0.70, 0.65]
+Mug: [0.45, 0.60, 0.55, 0.75]
+
+Now detect objects in the image:"""
+
+        # Call VLM for detection
+        detection_messages = [
+            HumanMessage(content=[
+                {"type": "text", "text": detection_prompt},
+                {"type": "image_url", "image_url": {"url": encoded_img}}
+            ])
+        ]
+
+        try:
+            detection_response = self._llm.invoke(detection_messages)
+            response_text = detection_response.content
+
+            print("\n" + "="*50)
+            print("[VLM Object Detection]")
+            print("="*50)
+            print(response_text)
+            print("="*50 + "\n")
+
+            # Parse bounding boxes from VLM response
+            bboxes = self._bbox_parser.parse_normalized_bbox(response_text)
+
+            if not bboxes:
+                # Try pixel format as fallback
+                bboxes = self._bbox_parser.parse_pixel_bbox(response_text)
+
+            # Convert bounding boxes to relative coordinates
+            coordinates = self._vision_estimator.batch_estimate(bboxes)
+
+            # Store detected objects in memory
+            for coord in coordinates:
+                self._memory_writer.record_vision_based_object(
+                    object_type=coord.object_type,
+                    x_local=coord.x_local,
+                    z_local=coord.z_local,
+                    confidence=coord.confidence,
+                    is_fixed=self._is_fixed_object(coord.object_type)
+                )
+
+            self._detected_objects = coordinates
+            return coordinates
+
+        except Exception as e:
+            print(f"[VLM Detection Error] {e}")
+            return []
+
+    def _is_fixed_object(self, object_type: str) -> bool:
+        """Check if an object type is fixed (non-pickupable).
+
+        Args:
+            object_type: The object type to check
+
+        Returns:
+            True if the object is typically fixed in place
+        """
+        fixed_objects = {
+            "Fridge", "Microwave", "StoveBurner", "Stove", "Oven",
+            "Sink", "SinkBasin", "CounterTop", "Cabinet", "Drawer",
+            "DiningTable", "CoffeeTable", "SideTable", "Shelf",
+            "Toaster", "CoffeeMachine", "GarbageCan", "Window", "Door",
+            "LightSwitch", "Chair", "Sofa", "Bed", "Desk"
+        }
+        return object_type in fixed_objects
+
+    def _format_detected_objects_text(self, coordinates: List[RelativeCoordinate]) -> str:
+        """Format detected objects for prompt injection (no-metadata mode).
+
+        Args:
+            coordinates: List of detected object coordinates
+
+        Returns:
+            Formatted text describing detected objects and their positions
+        """
+        if not coordinates:
+            return "Detected objects: None visible in current view."
+
+        lines = ["Detected objects (vision-based estimation):"]
+        for coord in coordinates:
+            direction = "right" if coord.x_local >= 0 else "left"
+            lines.append(
+                f"- {coord.object_type}: ~{abs(coord.x_local):.1f}m {direction}, "
+                f"~{coord.z_local:.1f}m ahead"
+            )
+
+        return "\n".join(lines)
+
     def send_environment_feedback(
             self, env_feedback: Union[EnvironmentState, QueryReturn],
             execution_result: Optional[str] = None) -> AIMessage:
@@ -284,18 +424,34 @@ class LLMAgent:
         self._current_step += 1
 
         # ============================================================
+        # [NO-METADATA MODE] - Detect objects via VLM before processing
+        # ============================================================
+        detected_coordinates = []
+        if self._no_metadata_mode and isinstance(env_feedback, EnvironmentState):
+            encoded_img = env_feedback.agent_camera_view
+            detected_coordinates = self._detect_objects_via_vlm(encoded_img)
+
+        # ============================================================
         # [Step 1: SAVE PHASE] - Write observations to memory
         # ============================================================
         if isinstance(env_feedback, EnvironmentState):
-            # Extract action from previous response (if any)
-            action_taken = None  # Will be set after first turn
-
-            # Write current observations to memory
-            self._memory_writer.process_environment_state(
-                env_state=env_feedback,
-                action_taken=action_taken,
-                execution_result=execution_result
-            )
+            if self._no_metadata_mode:
+                # In no-metadata mode, we already stored objects via _detect_objects_via_vlm
+                # Just record the observation without using visible_objects metadata
+                self._memory_writer.record_observation(
+                    agent_position=env_feedback.agent_position,
+                    agent_rotation=env_feedback.agent_rotation,
+                    action_success=env_feedback.last_action_success,
+                    error_message=env_feedback.error_message
+                )
+            else:
+                # Standard mode: use metadata for object detection
+                action_taken = None
+                self._memory_writer.process_environment_state(
+                    env_state=env_feedback,
+                    action_taken=action_taken,
+                    execution_result=execution_result
+                )
 
             # Track object relations if action succeeded
             if not is_first_turn and env_feedback.last_action_success:
@@ -306,7 +462,6 @@ class LLMAgent:
         # ============================================================
         memory_text = ""
         if isinstance(env_feedback, EnvironmentState):
-            # Retrieve context relevant to task and current situation
             context = self._memory_retriever.retrieve_relevant_context(
                 task_description=self._human_task,
                 env_state=env_feedback,
@@ -317,17 +472,30 @@ class LLMAgent:
         # ============================================================
         # [Step 3: ASSEMBLE PHASE] - Build fresh prompt
         # ============================================================
-        messages = self._context_assembler.assemble_messages(
-            env_state=env_feedback,
-            memory_text=memory_text,
-            execution_result=execution_result,
-            current_step=self._current_step,
-            is_first_turn=is_first_turn
-        )
-
-        # Print visible objects for debugging
-        visible_objects_text = self._format_visible_objects(env_feedback)
-        print(visible_objects_text)
+        if self._no_metadata_mode:
+            # In no-metadata mode, pass detected objects to assembler
+            messages = self._context_assembler.assemble_messages_no_metadata(
+                env_state=env_feedback,
+                detected_objects=detected_coordinates,
+                memory_text=memory_text,
+                execution_result=execution_result,
+                current_step=self._current_step,
+                is_first_turn=is_first_turn
+            )
+            # Print detected objects for debugging
+            detected_text = self._format_detected_objects_text(detected_coordinates)
+            print(detected_text)
+        else:
+            messages = self._context_assembler.assemble_messages(
+                env_state=env_feedback,
+                memory_text=memory_text,
+                execution_result=execution_result,
+                current_step=self._current_step,
+                is_first_turn=is_first_turn
+            )
+            # Print visible objects for debugging
+            visible_objects_text = self._format_visible_objects(env_feedback)
+            print(visible_objects_text)
 
         # Debug: Print memory context if available
         if memory_text:

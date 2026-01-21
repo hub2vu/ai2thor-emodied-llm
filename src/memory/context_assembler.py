@@ -7,10 +7,13 @@ It creates a fresh message list every turn by combining:
 3. Current observation (last action result, visible objects, screenshot)
 """
 
-from typing import List, Dict, Any, Optional, Union
+from typing import List, Dict, Any, Optional, Union, TYPE_CHECKING
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 
 from src.simulator import EnvironmentState, SimulatorObject
+
+if TYPE_CHECKING:
+    from src.vision import RelativeCoordinate
 
 
 class ContextAssembler:
@@ -168,6 +171,147 @@ class ContextAssembler:
         sections.append("Below is a screenshot from the simulator:")
 
         return "\n".join(sections)
+
+    def assemble_messages_no_metadata(self,
+                                       env_state: EnvironmentState,
+                                       detected_objects: List["RelativeCoordinate"],
+                                       memory_text: Optional[str] = None,
+                                       execution_result: Optional[str] = None,
+                                       current_step: int = 0,
+                                       is_first_turn: bool = False) -> List[Union[SystemMessage, HumanMessage]]:
+        """Assemble messages for no-metadata mode using vision-detected objects.
+
+        In no-metadata mode, we use VLM-detected objects with estimated positions
+        instead of simulator's visible_objects metadata.
+
+        Args:
+            env_state: Current environment state (only using position/rotation/success)
+            detected_objects: List of RelativeCoordinate from vision detection
+            memory_text: Formatted text from RAG memory retrieval
+            execution_result: Result/error from last code execution
+            current_step: Current step number
+            is_first_turn: Whether this is the first turn
+
+        Returns:
+            List of messages ready for LLM invocation
+        """
+        messages = []
+
+        # ============================================================
+        # 1. STATIC INFORMATION (from YAML)
+        # ============================================================
+        messages.append(SystemMessage(content=self._system_task))
+        messages.append(HumanMessage(content=f"# Your Goal:\n{self._human_task}"))
+
+        # ============================================================
+        # 2. RAG MEMORIES (dynamic)
+        # ============================================================
+        if memory_text and memory_text.strip():
+            memory_section = self._format_memory_section(memory_text)
+            messages.append(SystemMessage(content=memory_section))
+
+        # ============================================================
+        # 3. CURRENT OBSERVATION (no metadata - vision only)
+        # ============================================================
+        current_obs = self._format_current_observation_no_metadata(
+            env_state=env_state,
+            detected_objects=detected_objects,
+            execution_result=execution_result,
+            current_step=current_step,
+            is_first_turn=is_first_turn
+        )
+
+        # Combine text observation with screenshot
+        encoded_img = env_state.agent_camera_view
+        messages.append(HumanMessage(content=[
+            {"type": "text", "text": current_obs},
+            {"type": "image_url", "image_url": {"url": encoded_img}}
+        ]))
+
+        return messages
+
+    def _format_current_observation_no_metadata(self,
+                                                  env_state: EnvironmentState,
+                                                  detected_objects: List["RelativeCoordinate"],
+                                                  execution_result: Optional[str],
+                                                  current_step: int,
+                                                  is_first_turn: bool) -> str:
+        """Format current observation for no-metadata mode.
+
+        Args:
+            env_state: Environment state (position/rotation/success only)
+            detected_objects: Vision-detected objects with estimated positions
+            execution_result: Last execution result
+            current_step: Current step number
+            is_first_turn: Whether this is the first turn
+
+        Returns:
+            Formatted observation string (without visible_objects metadata)
+        """
+        sections = []
+
+        # Header
+        sections.append(f"# Current Observation (Step {current_step}) [VISION-ONLY MODE]")
+        sections.append("(Object positions are estimated from visual observation.)\n")
+
+        # Last Action Result (except on first turn)
+        if not is_first_turn:
+            if env_state.last_action_success:
+                action_status = "SUCCESS"
+            else:
+                action_status = f"FAILED - {env_state.error_message}"
+
+            sections.append(f"## Last Action Result: {action_status}")
+
+            if execution_result:
+                sections.append(f"Execution Output: {execution_result}")
+
+            sections.append("")
+
+        # Agent State (minimal - no absolute position in pure vision mode)
+        rot = env_state.agent_rotation
+        facing = self._get_facing_direction(rot['y'])
+        sections.append(f"## Agent State:")
+        sections.append(f"- Facing: {facing} ({rot['y']:.0f}°)")
+        sections.append("")
+
+        # Detected Objects (from vision)
+        sections.append("## Detected Objects (vision-estimated positions):")
+        if detected_objects:
+            for coord in detected_objects:
+                direction = "right" if coord.x_local >= 0 else "left"
+                sections.append(
+                    f"- {coord.object_type}: ~{abs(coord.x_local):.1f}m {direction}, "
+                    f"~{coord.z_local:.1f}m ahead"
+                )
+        else:
+            sections.append("- (No objects detected in current view)")
+        sections.append("")
+
+        # Instructions
+        sections.append("## Instructions:")
+        sections.append("Based on your Goal, Memories, and what you see in the screenshot,")
+        sections.append("generate Python code for your next action.")
+        sections.append("")
+        sections.append("IMPORTANT: You must identify objects visually in the screenshot.")
+        sections.append("Use the estimated positions above as hints, but verify visually.")
+        sections.append("")
+        sections.append("Below is a screenshot from the simulator:")
+
+        return "\n".join(sections)
+
+    def _get_facing_direction(self, rotation_y: float) -> str:
+        """Convert Y rotation to cardinal direction."""
+        rotation_y = rotation_y % 360
+
+        if rotation_y < 45 or rotation_y >= 315:
+            return "North"
+        elif rotation_y < 135:
+            return "East"
+        elif rotation_y < 225:
+            return "South"
+        else:
+            return "West"
 
     def format_visible_objects(self, env_state: EnvironmentState) -> str:
         """Format visible objects as a standalone string.
